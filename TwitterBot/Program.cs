@@ -238,7 +238,7 @@ namespace TwitterBot
 			var driver = GetChromeDriver(bot);
 			try
 			{
-				Thread.Sleep(new Random().Next(1000, 600000));
+				Thread.Sleep(new Random().Next(1000, 300000));
 				if (LoginToTwitter(driver, bot))
 				{
 					driver.Navigate().GoToUrl(TwitterTargetUrl);
