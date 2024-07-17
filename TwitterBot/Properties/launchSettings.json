@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "TwitterBot": {
+      "commandName": "Project",
+      "commandLineArgs": "/like https://x.com/aakhrinabi/status/1813237078517321954?s=46 -commandBy#theterminator07"
+    }
+  }
+}
