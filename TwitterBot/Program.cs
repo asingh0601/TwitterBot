@@ -391,7 +391,7 @@ namespace TwitterBot
 			{
 				SqlConnection conn = new(ConnectionString);
 				conn.Open();
-				var sqlQuery = $"INSERT INTO [dbo].[SpaceProcessIds] ([ProcessDate],[CommandUserName],[UserName],[Directory],[Url],[ProcessId],[ProcessKilled]) VALUES ('{DateTime.Now:yyyy-MM-dd HH:mm:ss}','{CommandUserName}','{bot.TwitterUserName}','{bot.UserDataDirectory}','{TwitterTargetUrl}',{bot.ProcessId},0)";
+				var sqlQuery = $"INSERT INTO [dbo].[SpaceProcessIds] ([ProcessDate],[CommandUserName],[UserName],[LoginSuccessful],[Directory],[Url],[ProcessId],[ProcessKilled]) VALUES ('{DateTime.Now:yyyy-MM-dd HH:mm:ss}','{CommandUserName}',0,'{bot.TwitterUserName}','{bot.UserDataDirectory}','{TwitterTargetUrl}',{bot.ProcessId},0)";
 
 				using SqlCommand command = new(sqlQuery, conn);
 				var result = command.ExecuteNonQuery();
@@ -407,7 +407,7 @@ namespace TwitterBot
 			{
 				SqlConnection conn = new(ConnectionString);
 				conn.Open();
-				var sqlQuery = $"UPDATE [dbo].[SpaceProcessIds] SET Url = {TwitterTargetUrl} Where ProcessId = '{bot.ProcessId}' AND UserName = '{bot.TwitterUserName}'";
+				var sqlQuery = $"UPDATE [dbo].[SpaceProcessIds] SET Url = {TwitterTargetUrl}, LoginSuccessful = 1 Where ProcessId = '{bot.ProcessId}' AND UserName = '{bot.TwitterUserName}'";
 
 				using SqlCommand command = new(sqlQuery, conn);
 				var result = command.ExecuteNonQuery();
