@@ -2,7 +2,7 @@
   "profiles": {
     "TwitterBot": {
       "commandName": "Project",
-      "commandLineArgs": "/likeretweet https://x.com/phoenix0fire_/status/1815727304351334740?s=46 -commandBy#theterminator07"
+      "commandLineArgs": "/reportspace https://x.com/i/spaces/1MYxNMbedrvJw/peek -commandBy#theterminator07"
     }
   }
 }

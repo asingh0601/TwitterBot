@@ -1,5 +1,6 @@
 ﻿using OpenQA.Selenium;
 using OpenQA.Selenium.Chrome;
+using OpenQA.Selenium.Interactions;
 using OpenQA.Selenium.Support.UI;
 using System.Data.SqlClient;
 
@@ -65,6 +66,9 @@ namespace TwitterBot
 					break;
 				case "/follow":
 					function = FollowBot;
+					break;
+				case "/reportspace":
+					function = ReportTwitterSpace;
 					break;
 			}
 			var tasks = new List<Task>();
@@ -297,6 +301,41 @@ namespace TwitterBot
 			{
 				SafelyExitBotInstance(driver, bot);
 			});
+		}
+		private static void ReportTwitterSpace(Bot bot)
+		{
+			ChromeDriver driver = GetChromeDriver(bot);
+			JoinTwitterSpace(bot, driver);
+			var moreOptionsLocator = By.XPath("/html/body/div[1]/div/div/div[1]/div/div[1]/div/div/div/div[1]/div/div/div[1]/div[1]/div/button[3]");
+			var reportSpaceLocator = By.XPath("/html/body/div[1]/div/div/div[1]/div[2]/div/div/div/div[2]/div/div[3]/div/div/div/div[2]");
+			var violenceOptionLocator = By.XPath("/html/body/div[1]/div/div/div[1]/div/div[1]/div/div/div/div[3]/div[2]/div/div/div/div/div/div[4]");
+			var leaveButtonLocator = By.XPath(@"//span[text()='Leave']");
+
+			try
+			{
+				WaitUntilElementClickable(driver, moreOptionsLocator);
+				var moreOptions = driver.FindElement(moreOptionsLocator);
+				moreOptions.Click();
+				Thread.Sleep(3500);
+
+				WaitUntilElementClickable(driver, reportSpaceLocator);
+				var reportSpace = driver.FindElement(reportSpaceLocator);
+				reportSpace.Click();
+				Thread.Sleep(2500);
+
+				WaitUntilElementClickable(driver, violenceOptionLocator);
+				var violenceOption = driver.FindElement(violenceOptionLocator);
+				violenceOption.Click();
+				Thread.Sleep(3300);
+
+				WaitUntilElementClickable(driver, leaveButtonLocator);
+				var leaveButton = driver.FindElement(leaveButtonLocator);
+				leaveButton.Click();
+			}
+			finally
+			{
+				SafelyExitBotInstance(driver, bot);
+			}
 		}
 		private static void JoinTwitterSpaceAndLaugh(Bot bot)
 		{
@@ -556,11 +595,15 @@ namespace TwitterBot
 #if !DEBUG
 				"--blink-settings=imagesEnabled=false",
 #endif
+				"--disable-blink-features=AutomationControlled",
 				@$"--user-data-dir={bot.UserDataDirectory}",
-			}
-			);
+			});
+
+			chromeOptions.AddExcludedArgument("enable-automation");
+			chromeOptions.AddAdditionalChromeOption("useAutomationExtension", false);
 
 			var driver = new ChromeDriver(svc, chromeOptions);
+			driver.ExecuteScript("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})");
 #if !DEBUG
 			NetworkAuthenticationHandler handler = new()
 			{
@@ -612,7 +655,35 @@ namespace TwitterBot
 
 			foreach (string newPath in Directory.GetFiles(sourcePath, "*.*", SearchOption.AllDirectories))
 			{
-				File.Copy(newPath, newPath.Replace(sourcePath, targetPath), true);
+				FileCopy(newPath, newPath.Replace(sourcePath, targetPath);
+			}
+		}
+
+		private static void FileCopy(string oldPath, string newPath)
+		{
+			FileStream input = null;
+			FileStream output = null;
+			try
+			{
+				input = new FileStream(oldPath, FileMode.Open);
+				output = new FileStream(newPath, FileMode.Create, FileAccess.ReadWrite);
+
+				byte[] buffer = new byte[32768];
+				int read;
+				while ((read = input.Read(buffer, 0, buffer.Length)) > 0)
+				{
+					output.Write(buffer, 0, read);
+				}
+			}
+			catch (Exception e)
+			{
+			}
+			finally
+			{
+				input.Close();
+				input.Dispose();
+				output.Close();
+				output.Dispose();
 			}
 		}
 
