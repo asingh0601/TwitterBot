@@ -301,7 +301,11 @@ namespace TwitterBot
 		private static void JoinTwitterSpaceAndLaugh(Bot bot)
 		{
 			ChromeDriver driver = GetChromeDriver(bot);
-			JoinTwitterSpace(bot, driver);
+			if (JoinTwitterSpace(bot, driver))
+			{
+				ShowLaughEmoji(driver);
+			}
+
 			Task.Delay(15 * 60 * 1000).ContinueWith((task) =>
 			{
 				SafelyExitBotInstance(driver, bot);
@@ -352,16 +356,16 @@ namespace TwitterBot
 		private static void ShowLaughEmoji(ChromeDriver driver)
 		{
 			var emojis = new List<string> {
-				"//*[@id=\"layers\"]/div[3]/div/div/div[2]/div/div[2]/div/div/div/div/div/div/div/button[1]",
-				"//*[@id=\"layers\"]/div[3]/div/div/div[2]/div/div[2]/div/div/div/div/div/div/div/button[2]",
-				"//*[@id=\"layers\"]/div[3]/div/div/div[2]/div/div[2]/div/div/div/div/div/div/div/button[3]",
-				"//*[@id=\"layers\"]/div[3]/div/div/div[2]/div/div[2]/div/div/div/div/div/div/div/button[4]",
-				"//*[@id=\"layers\"]/div[3]/div/div/div[2]/div/div[2]/div/div/div/div/div/div/div/button[5]",
-				"//*[@id=\"layers\"]/div[3]/div/div/div[2]/div/div[2]/div/div/div/div/div/div/div/button[6]",
-				"//*[@id=\"layers\"]/div[3]/div/div/div[2]/div/div[2]/div/div/div/div/div/div/div/button[7]",
-				"//*[@id=\"layers\"]/div[3]/div/div/div[2]/div/div[2]/div/div/div/div/div/div/div/button[8]",
-				"//*[@id=\"layers\"]/div[3]/div/div/div[2]/div/div[2]/div/div/div/div/div/div/div/button[9]",
-				"//*[@id=\"layers\"]/div[3]/div/div/div[2]/div/div[2]/div/div/div/div/div/div/div/button[10]"
+				"//*[@id=\"layers\"]/div[2]/div/div/div[2]/div/div[2]/div/div/div/div/div/div/div/button[1]",
+				"//*[@id=\"layers\"]/div[2]/div/div/div[2]/div/div[2]/div/div/div/div/div/div/div/button[2]",
+				"//*[@id=\"layers\"]/div[2]/div/div/div[2]/div/div[2]/div/div/div/div/div/div/div/button[3]",
+				"//*[@id=\"layers\"]/div[2]/div/div/div[2]/div/div[2]/div/div/div/div/div/div/div/button[4]",
+				"//*[@id=\"layers\"]/div[2]/div/div/div[2]/div/div[2]/div/div/div/div/div/div/div/button[5]",
+				"//*[@id=\"layers\"]/div[2]/div/div/div[2]/div/div[2]/div/div/div/div/div/div/div/button[6]",
+				"//*[@id=\"layers\"]/div[2]/div/div/div[2]/div/div[2]/div/div/div/div/div/div/div/button[7]",
+				"//*[@id=\"layers\"]/div[2]/div/div/div[2]/div/div[2]/div/div/div/div/div/div/div/button[8]",
+				"//*[@id=\"layers\"]/div[2]/div/div/div[2]/div/div[2]/div/div/div/div/div/div/div/button[9]",
+				"//*[@id=\"layers\"]/div[2]/div/div/div[2]/div/div[2]/div/div/div/div/div/div/div/button[10]"
 			};
 			for (int i = 0; i < 1000; i++)
 			{
@@ -370,7 +374,7 @@ namespace TwitterBot
 				var emojisToggler = driver.FindElement(emojisTogglerLocator);
 				emojisToggler.Click();
 
-				var laughEmojiLocator = By.XPath(emojis[1]);
+				var laughEmojiLocator = By.XPath(emojis[0]);
 				WaitUntilElementClickable(driver, laughEmojiLocator);
 				var laughEmoji = driver.FindElement(laughEmojiLocator);
 				laughEmoji.Click();
@@ -549,7 +553,9 @@ namespace TwitterBot
 				"disable-notifications",
 				"disable-web-security",
 				"ignore-certificate-errors",
+#if !DEBUG
 				"--blink-settings=imagesEnabled=false",
+#endif
 				@$"--user-data-dir={bot.UserDataDirectory}",
 			}
 			);
