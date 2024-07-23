@@ -1,6 +1,5 @@
 ﻿using OpenQA.Selenium;
 using OpenQA.Selenium.Chrome;
-using OpenQA.Selenium.Chrome.ChromeDriverExtensions;
 using OpenQA.Selenium.Support.UI;
 using System.Data.SqlClient;
 
@@ -15,91 +14,15 @@ namespace TwitterBot
 			ConnectionString = $"Data Source={Configuration.Server}{(string.IsNullOrWhiteSpace(Configuration.Port) ? string.Empty : $":{Configuration.Port}")};Initial Catalog={Configuration.DbName};Persist Security Info=True;User ID={Configuration.DbUserId};Password={Configuration.DbUserPassword};TrustServerCertificate=True";
 		}
 
+		#region variables
 		private const string TwitterLoginUrl = "https://x.com/i/flow/login";
 		private static List<Bot>? Bots;
 		private static bool AnonymousMode = false;
-
 		private static string? TwitterTargetUrl;
 		private static int SpaceJoinIntervalOffset = 0;
 		private static string? CommandUserName;
-
-		private static List<Bot> GetBotsFromDb()
-		{
-			string preciseSelector = "DISTINCT";
-#if DEBUG
-			preciseSelector = "TOP 1";
-#endif
-			List<Bot> bots = [];
-			try
-			{
-				SqlConnection conn = new(ConnectionString);
-				conn.Open();
-				var sqlQuery = $"SELECT {preciseSelector} UserName, EmailId, Password FROM BotDetails WHERE LoginFailure = 0";
-
-				using SqlCommand command = new(sqlQuery, conn);
-				var result = command.ExecuteReader();
-
-				while (result.Read())
-				{
-					bots.Add(new Bot { TwitterUserName = result["UserName"].ToString(), TwitterEmail = result["EmailId"].ToString(), TwitterPassword = result["Password"].ToString() });
-				}
-				conn.Close();
-			}
-			catch (Exception) { }
-			return bots;
-		}
-		private static ChromeDriver GetChromeDriver(Bot bot)
-		{
-			var svc = ChromeDriverService.CreateDefaultService();
-			var chromeOptions = new ChromeOptions();
-			chromeOptions.AddArguments(new List<string>()
-			{
-#if !DEBUG
-				"--headless=new",
-#endif
-				"no-sandbox",
-				"start-maximized",
-				"disable-notifications",
-				"disable-web-security",
-				"ignore-certificate-errors",
-				"--blink-settings=imagesEnabled=false",
-				@$"--user-data-dir=C:\temp\{bot.TwitterUserName}",
-			}
-			);
-			chromeOptions.AddHttpProxy(Configuration.ProxyIp, Configuration.ProxyPort, Configuration.ProxyUserName, Configuration.ProxyPassword);
-			var driver = new ChromeDriver(svc, chromeOptions);
-			bot.ProcessId = svc.ProcessId;
-			SaveProcessId(bot);
-			return driver;
-		}
-
-		private static IWebElement WaitUntilElementClickable(ChromeDriver driver, By elementLocator, int timeout = 10)
-		{
-			try
-			{
-				var wait = new WebDriverWait(driver, TimeSpan.FromSeconds(timeout));
-				return wait.Until(SeleniumExtras.WaitHelpers.ExpectedConditions.ElementToBeClickable(elementLocator));
-			}
-			catch (NoSuchElementException)
-			{
-				Console.WriteLine("Element with locator: '" + elementLocator + "' was not found in current context page.");
-				throw;
-			}
-		}
-
-		private static IWebElement WaitUntilElementVisible(ChromeDriver driver, By elementLocator, int timeout = 10)
-		{
-			try
-			{
-				var wait = new WebDriverWait(driver, TimeSpan.FromSeconds(timeout));
-				return wait.Until(SeleniumExtras.WaitHelpers.ExpectedConditions.ElementIsVisible(elementLocator));
-			}
-			catch (NoSuchElementException)
-			{
-				Console.WriteLine("Element with locator: '" + elementLocator + "' was not found in current context page.");
-				throw;
-			}
-		}
+		private static INetwork? NetworkInterceptor;
+		#endregion
 
 		static void Main(string[] args)
 		{
@@ -126,14 +49,14 @@ namespace TwitterBot
 			Action<Bot>? function = null;
 			switch (taskType)
 			{
-				case "/like":
-					function = LikeTweetsBot;
-					break;
-				case "/retweet":
-					function = RetweetBot;
+				case "/likeretweet":
+					function = LikeRetweetTweetsBot;
 					break;
 				case "/join":
 					function = JoinTwitterSpace;
+					break;
+				case "/joinlaugh":
+					function = JoinTwitterSpaceAndLaugh;
 					break;
 				case "/rjoin":
 					function = RunTwitterSpacesBot;
@@ -153,15 +76,31 @@ namespace TwitterBot
 			}
 			Task.WaitAll([.. tasks]);
 		}
+
+		#region BotLogin
 		private static bool LoginToTwitter(ChromeDriver driver, Bot bot)
 		{
 			var profileIconLocator = By.XPath(@"//a[@data-testid=""AppTabBar_Profile_Link""]");
 			try
 			{
-				driver.Navigate().GoToUrl($"https://x.com/{bot.TwitterUserName}");
-				WaitUntilElementClickable(driver, profileIconLocator);
-				Console.WriteLine($"{bot.TwitterUserName} has logged in to twitter.");
-				return true;
+				driver.Navigate().GoToUrl($"https://x.com/home");
+				try
+				{
+					WaitUntilElementClickable(driver, profileIconLocator);
+					Console.WriteLine($"{bot.TwitterUserName} has logged in to twitter.");
+					return true;
+				}
+				catch
+				{
+					if (!CheckAndMarkIdSuspended(driver, bot) || !CheckAndMarkIdLocked(driver, bot) || !CheckAndMarkEmailVerification(driver, bot))
+					{
+						NetworkInterceptor?.StopMonitoring();
+						driver.Dispose();
+						Thread.Yield();
+						return false;
+					}
+					throw;
+				}
 			}
 			catch
 			{
@@ -176,7 +115,7 @@ namespace TwitterBot
 					usernameField.SendKeys(Keys.Enter);
 					try
 					{
-						var emailFieldLocator = By.XPath("//*[@id=\"layers\"]/div[2]/div/div/div/div/div/div[2]/div[2]/div/div/div[2]/div[2]/div[1]/div/div[2]/label/div/div[2]/div/input");
+						var emailFieldLocator = By.Name("text");
 						WaitUntilElementClickable(driver, emailFieldLocator);
 						var emailField = driver.FindElement(emailFieldLocator);
 						emailField.SendKeys(bot.TwitterEmail);
@@ -190,7 +129,7 @@ namespace TwitterBot
 					passwordField.SendKeys(Keys.Enter);
 					try
 					{
-						var emailFieldLocator = By.XPath("//*[@id=\"layers\"]/div[2]/div/div/div/div/div/div[2]/div[2]/div/div/div[2]/div[2]/div[1]/div/div[2]/label/div/div[2]/div/input");
+						var emailFieldLocator = By.Name("text");
 						WaitUntilElementClickable(driver, emailFieldLocator);
 						var emailField = driver.FindElement(emailFieldLocator);
 						emailField.SendKeys(bot.TwitterEmail);
@@ -208,7 +147,13 @@ namespace TwitterBot
 						nextButtonField.Click();
 					}
 					catch (Exception) { }
-
+					if (!CheckAndMarkIdSuspended(driver, bot) || !CheckAndMarkIdLocked(driver, bot) || !CheckAndMarkEmailVerification(driver, bot))
+					{
+						NetworkInterceptor?.StopMonitoring();
+						driver.Dispose();
+						Thread.Yield();
+						return false;
+					}
 					WaitUntilElementClickable(driver, profileIconLocator);
 					Console.WriteLine($"{bot.TwitterUserName} has logged in to twitter.");
 					return true;
@@ -216,29 +161,22 @@ namespace TwitterBot
 				catch (Exception)
 				{
 					Console.WriteLine($"{bot.TwitterUserName} could not log in to twitter.");
-					try
-					{
-						SqlConnection conn = new(ConnectionString);
-						conn.Open();
-						var sqlQuery = $"Update BotDetails SET LoginFailure = 1 WHERE UserName = '{bot.TwitterUserName}'";
-
-						using SqlCommand command = new(sqlQuery, conn);
-						var result = command.ExecuteNonQuery();
-						conn.Close();
-					}
-					catch (Exception) { }
+					MarkLoginFailure(bot);
+					NetworkInterceptor?.StopMonitoring();
 					driver.Dispose();
 					Thread.Yield();
 					return false;
 				}
 			}
 		}
-		private static void LikeTweetsBot(Bot bot)
+		#endregion
+
+		#region botactions
+		private static void LikeRetweetTweetsBot(Bot bot)
 		{
 			var driver = GetChromeDriver(bot);
 			try
 			{
-				Thread.Sleep(new Random().Next(1000, 300000));
 				if (LoginToTwitter(driver, bot))
 				{
 					driver.Navigate().GoToUrl(TwitterTargetUrl);
@@ -246,58 +184,46 @@ namespace TwitterBot
 					{
 						var likeButtonLocator = By.XPath(@"(//button[@data-testid=""like""])[1]");
 						WaitUntilElementClickable(driver, likeButtonLocator);
+						var jse = (IJavaScriptExecutor)driver;
+						jse.ExecuteScript("window.scrollBy(0,250)");
+						Thread.Sleep(1000);
+						jse.ExecuteScript("window.scrollBy(0,-240)");
+						Thread.Sleep(new Random().Next(1000, 240000));
 						var likeButton = driver.FindElement(likeButtonLocator);
 						likeButton.Click();
-						Console.WriteLine($"{bot.TwitterUserName} has liked the target tweet.");
-					}
-					catch (Exception) { }
-				}
-				else
-				{
-					Console.WriteLine($"{bot.TwitterUserName} could not like target tweet.");
-				}
-			}
-			finally
-			{
-				driver.Dispose();
-				Thread.Yield();
-			}
-		}
-		private static void RetweetBot(Bot bot)
-		{
-			var driver = GetChromeDriver(bot);
-			try
-			{
-				if (LoginToTwitter(driver, bot))
-				{
-					Thread.Sleep(new Random().Next(1000, 600000));
-					driver.Navigate().GoToUrl(TwitterTargetUrl);
-					try
-					{
+						Thread.Sleep(1000);
+
 						var retweetButtonLocator = By.XPath(@"(//button[@data-testid=""retweet""])[1]");
 						var repostOptionLocator = By.XPath(@"//span[text()='Repost']");
 						WaitUntilElementClickable(driver, retweetButtonLocator);
 						var retweetButton = driver.FindElement(retweetButtonLocator);
 						retweetButton.Click();
+						Thread.Sleep(1000);
 						WaitUntilElementClickable(driver, repostOptionLocator);
 						var repostButton = driver.FindElement(repostOptionLocator);
 						repostButton.Click();
-						Console.WriteLine($"{bot.TwitterUserName} has retweeted the target tweet.");
+						Thread.Sleep(1000);
+
+						jse.ExecuteScript("window.scrollBy(0,350)");
+						Thread.Sleep(1000);
+						jse.ExecuteScript("window.scrollBy(0,-280)");
+						Console.WriteLine($"{bot.TwitterUserName} has liked & retweeted the target tweet.");
+						Thread.Sleep(3000);
 					}
 					catch (Exception) { }
 				}
 				else
 				{
-					Console.WriteLine($"{bot.TwitterUserName} could not retweet target tweet.");
+					Console.WriteLine($"{bot.TwitterUserName} could not like & retweet target tweet.");
 				}
 			}
 			finally
 			{
+				NetworkInterceptor?.StopMonitoring();
 				driver.Dispose();
 				Thread.Yield();
 			}
 		}
-
 		private static void FollowBot(Bot bot)
 		{
 			var driver = GetChromeDriver(bot);
@@ -324,6 +250,7 @@ namespace TwitterBot
 			}
 			finally
 			{
+				NetworkInterceptor?.StopMonitoring();
 				driver.Dispose();
 				Thread.Yield();
 			}
@@ -349,17 +276,29 @@ namespace TwitterBot
 			}
 			finally
 			{
+				NetworkInterceptor?.StopMonitoring();
 				driver.Dispose();
 				Thread.Yield();
 			}
 		}
-
 		private static void JoinTwitterSpace(Bot bot)
 		{
 			ChromeDriver driver = GetChromeDriver(bot);
 			JoinTwitterSpace(bot, driver);
 			Task.Delay(15 * 60 * 1000).ContinueWith((task) =>
 			{
+				NetworkInterceptor?.StopMonitoring();
+				driver.Dispose();
+				Thread.Yield();
+			});
+		}
+		private static void JoinTwitterSpaceAndLaugh(Bot bot)
+		{
+			ChromeDriver driver = GetChromeDriver(bot);
+			JoinTwitterSpace(bot, driver);
+			Task.Delay(15 * 60 * 1000).ContinueWith((task) =>
+			{
+				NetworkInterceptor?.StopMonitoring();
 				driver.Dispose();
 				Thread.Yield();
 			});
@@ -406,7 +345,37 @@ namespace TwitterBot
 			}
 			return false;
 		}
+		private static void ShowLaughEmoji(ChromeDriver driver)
+		{
+			var emojis = new List<string> {
+				"//*[@id=\"layers\"]/div[3]/div/div/div[2]/div/div[2]/div/div/div/div/div/div/div/button[1]",
+				"//*[@id=\"layers\"]/div[3]/div/div/div[2]/div/div[2]/div/div/div/div/div/div/div/button[2]",
+				"//*[@id=\"layers\"]/div[3]/div/div/div[2]/div/div[2]/div/div/div/div/div/div/div/button[3]",
+				"//*[@id=\"layers\"]/div[3]/div/div/div[2]/div/div[2]/div/div/div/div/div/div/div/button[4]",
+				"//*[@id=\"layers\"]/div[3]/div/div/div[2]/div/div[2]/div/div/div/div/div/div/div/button[5]",
+				"//*[@id=\"layers\"]/div[3]/div/div/div[2]/div/div[2]/div/div/div/div/div/div/div/button[6]",
+				"//*[@id=\"layers\"]/div[3]/div/div/div[2]/div/div[2]/div/div/div/div/div/div/div/button[7]",
+				"//*[@id=\"layers\"]/div[3]/div/div/div[2]/div/div[2]/div/div/div/div/div/div/div/button[8]",
+				"//*[@id=\"layers\"]/div[3]/div/div/div[2]/div/div[2]/div/div/div/div/div/div/div/button[9]",
+				"//*[@id=\"layers\"]/div[3]/div/div/div[2]/div/div[2]/div/div/div/div/div/div/div/button[10]"
+			};
+			for (int i = 0; i < 1000; i++)
+			{
+				var emojisTogglerLocator = By.XPath(@"//*[@id=""layers""]/div/div[1]/div/div/div/div[2]/div/div/div[2]/div/button");
+				WaitUntilElementClickable(driver, emojisTogglerLocator);
+				var emojisToggler = driver.FindElement(emojisTogglerLocator);
+				emojisToggler.Click();
 
+				var laughEmojiLocator = By.XPath(emojis[1]);
+				WaitUntilElementClickable(driver, laughEmojiLocator);
+				var laughEmoji = driver.FindElement(laughEmojiLocator);
+				laughEmoji.Click();
+				Thread.Sleep(1000);
+			}
+		}
+		#endregion
+
+		#region helpermethods
 		private static void SaveProcessId(Bot bot)
 		{
 			try
@@ -423,6 +392,7 @@ namespace TwitterBot
 		}
 		private static void UpdateSpaceUrlToProcessEntry(Bot bot)
 		{
+#if !DEBUG
 			try
 			{
 				SqlConnection conn = new(ConnectionString);
@@ -434,33 +404,192 @@ namespace TwitterBot
 				conn.Close();
 			}
 			catch (Exception) { }
+#endif
 		}
-		private static void ShowEmojisRandomly(ChromeDriver driver)
+		private static void MarkLoginFailure(Bot bot)
 		{
-			var emojisTogglerLocator = By.XPath(@"//*[@id=""layers""]/div/div[1]/div/div/div/div[2]/div/div/div[2]/div/button");
-			WaitUntilElementClickable(driver, emojisTogglerLocator);
-			var emojisToggler = driver.FindElement(emojisTogglerLocator);
-			emojisToggler.Click();
+			try
+			{
+				SqlConnection conn = new(ConnectionString);
+				conn.Open();
+				var sqlQuery = $"Update BotDetails SET LoginFailure = LoginFailure + 1 WHERE UserName = '{bot.TwitterUserName}'";
 
-			var emojis = new List<string> {
-				"//*[@id=\"layers\"]/div[3]/div/div/div[2]/div/div[2]/div/div/div/div/div/div/div/button[1]",
-				"//*[@id=\"layers\"]/div[3]/div/div/div[2]/div/div[2]/div/div/div/div/div/div/div/button[2]",
-				"//*[@id=\"layers\"]/div[3]/div/div/div[2]/div/div[2]/div/div/div/div/div/div/div/button[3]",
-				"//*[@id=\"layers\"]/div[3]/div/div/div[2]/div/div[2]/div/div/div/div/div/div/div/button[4]",
-				"//*[@id=\"layers\"]/div[3]/div/div/div[2]/div/div[2]/div/div/div/div/div/div/div/button[5]",
-				"//*[@id=\"layers\"]/div[3]/div/div/div[2]/div/div[2]/div/div/div/div/div/div/div/button[6]",
-				"//*[@id=\"layers\"]/div[3]/div/div/div[2]/div/div[2]/div/div/div/div/div/div/div/button[7]",
-				"//*[@id=\"layers\"]/div[3]/div/div/div[2]/div/div[2]/div/div/div/div/div/div/div/button[8]",
-				"//*[@id=\"layers\"]/div[3]/div/div/div[2]/div/div[2]/div/div/div/div/div/div/div/button[9]",
-				"//*[@id=\"layers\"]/div[3]/div/div/div[2]/div/div[2]/div/div/div/div/div/div/div/button[10]"
+				using SqlCommand command = new(sqlQuery, conn);
+				var result = command.ExecuteNonQuery();
+				conn.Close();
+			}
+			catch (Exception) { }
+		}
+		private static bool CheckAndMarkEmailVerification(ChromeDriver driver, Bot bot)
+		{
+			try
+			{
+				var emailVerifyDivLocator = By.XPath("//div[normalize-space()='Please verify your email address.']");
+				WaitUntilElementVisible(driver, emailVerifyDivLocator);
+				SqlConnection conn = new(ConnectionString);
+				conn.Open();
+				var sqlQuery = $"Update BotDetails SET IdLocked = 1 WHERE UserName = '{bot.TwitterUserName}'";
+
+				using SqlCommand command = new(sqlQuery, conn);
+				var result = command.ExecuteNonQuery();
+				conn.Close();
+				return false;
+			}
+			catch (Exception) { return true; }
+		}
+		private static bool CheckAndMarkIdSuspended(ChromeDriver driver, Bot bot)
+		{
+			try
+			{
+				var idSuspendedSpanLocator = By.XPath("//span[text()='Your account is suspended']");
+				WaitUntilElementVisible(driver, idSuspendedSpanLocator);
+				SqlConnection conn = new(ConnectionString);
+				conn.Open();
+				var sqlQuery = $"Update BotDetails SET IdSuspended = 1 WHERE UserName = '{bot.TwitterUserName}'";
+
+				using SqlCommand command = new(sqlQuery, conn);
+				var result = command.ExecuteNonQuery();
+				conn.Close();
+				return false;
+			}
+			catch (Exception) { return true; }
+		}
+		private static bool CheckAndMarkIdLocked(ChromeDriver driver, Bot bot)
+		{
+			bool idLocked = false;
+			try
+			{
+				try
+				{
+					var verificationCodeDivLocator = By.XPath(@"//div[normalize-space()='We sent your verification code.']");
+					WaitUntilElementVisible(driver, verificationCodeDivLocator);
+					idLocked = true;
+				}
+				catch
+				{
+					try
+					{
+						var idLockedDivLocator = By.XPath(@"//div[normalize-space()='Your account has been locked.']");
+						WaitUntilElementVisible(driver, idLockedDivLocator);
+						idLocked = true;
+					}
+					catch { }
+				}
+				if (idLocked)
+				{
+					SqlConnection conn = new(ConnectionString);
+					conn.Open();
+					var sqlQuery = $"Update BotDetails SET IdLocked = 1 WHERE UserName = '{bot.TwitterUserName}'";
+
+					using SqlCommand command = new(sqlQuery, conn);
+					var result = command.ExecuteNonQuery();
+					conn.Close();
+					return false;
+				}
+				return true;
+			}
+			catch (Exception) { return true; }
+		}
+		private static List<Bot> GetBotsFromDb()
+		{
+			string preciseSelector = "DISTINCT";
+#if DEBUG
+			preciseSelector = "TOP 5";
+#endif
+			List<Bot> bots = [];
+			try
+			{
+				SqlConnection conn = new(ConnectionString);
+				conn.Open();
+				var sqlQuery = $"SELECT {preciseSelector} UserName, EmailId, Password FROM BotDetails WHERE LoginFailure < 3 AND EmailVerificationRequired = 0 AND IdSuspended = 0 AND IdLocked = 0";
+
+				using SqlCommand command = new(sqlQuery, conn);
+				var result = command.ExecuteReader();
+
+				while (result.Read())
+				{
+					bots.Add(new Bot { TwitterUserName = result["UserName"].ToString(), TwitterEmail = result["EmailId"].ToString(), TwitterPassword = result["Password"].ToString() });
+				}
+				conn.Close();
+			}
+			catch (Exception) { }
+			return bots;
+		}
+		private static ChromeDriver GetChromeDriver(Bot bot)
+		{
+#if !DEBUG
+			Proxy proxy = new()
+			{
+				Kind = ProxyKind.Manual,
+				IsAutoDetect = false,
+				SslProxy = $"{Configuration.ProxyIp}:{Configuration.ProxyPort}",
+				HttpProxy = $"{Configuration.ProxyIp}:{Configuration.ProxyPort}"
+			};
+#endif
+			var svc = ChromeDriverService.CreateDefaultService();
+			var chromeOptions = new ChromeOptions
+			{
+#if !DEBUG
+				Proxy = proxy
+#endif
+			};
+			chromeOptions.AddArguments(new List<string>()
+			{
+#if !DEBUG
+				"--headless=new",
+#endif
+				"no-sandbox",
+				"start-maximized",
+				"disable-notifications",
+				"disable-web-security",
+				"ignore-certificate-errors",
+				"--blink-settings=imagesEnabled=false",
+				@$"--user-data-dir=C:\temp\{bot.TwitterUserName}",
+			}
+			);
+
+			var driver = new ChromeDriver(svc, chromeOptions);
+#if !DEBUG
+			NetworkAuthenticationHandler handler = new()
+			{
+				UriMatcher = d => true, //d.Host.Contains("your-host.com")
+				Credentials = new PasswordCredentials(Configuration.ProxyUserName, Configuration.ProxyPassword)
 			};
 
-			var rnd = new Random();
-			int emojiNumber = rnd.Next(1, 10);
-			var laughEmojiLocator = By.XPath(emojis[emojiNumber]);
-			WaitUntilElementClickable(driver, laughEmojiLocator);
-			var laughEmoji = driver.FindElement(laughEmojiLocator);
-			laughEmoji.Click();
+			NetworkInterceptor = driver.Manage().Network;
+			NetworkInterceptor.AddAuthenticationHandler(handler);
+			NetworkInterceptor.StartMonitoring();
+			bot.ProcessId = svc.ProcessId;
+			SaveProcessId(bot);
+#endif
+			return driver;
 		}
+		private static IWebElement WaitUntilElementClickable(ChromeDriver driver, By elementLocator, int timeout = 10)
+		{
+			try
+			{
+				var wait = new WebDriverWait(driver, TimeSpan.FromSeconds(timeout));
+				return wait.Until(SeleniumExtras.WaitHelpers.ExpectedConditions.ElementToBeClickable(elementLocator));
+			}
+			catch (NoSuchElementException)
+			{
+				Console.WriteLine("Element with locator: '" + elementLocator + "' was not found in current context page.");
+				throw;
+			}
+		}
+		private static IWebElement WaitUntilElementVisible(ChromeDriver driver, By elementLocator, int timeout = 10)
+		{
+			try
+			{
+				var wait = new WebDriverWait(driver, TimeSpan.FromSeconds(timeout));
+				return wait.Until(SeleniumExtras.WaitHelpers.ExpectedConditions.ElementIsVisible(elementLocator));
+			}
+			catch (NoSuchElementException)
+			{
+				Console.WriteLine("Element with locator: '" + elementLocator + "' was not found in current context page.");
+				throw;
+			}
+		}
+		#endregion
 	}
 }
