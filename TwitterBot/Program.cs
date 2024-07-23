@@ -386,7 +386,7 @@ namespace TwitterBot
 		#region helpermethods
 		private static void SaveProcessId(Bot bot)
 		{
-#if !DEBUG
+#if DEBUG
 			try
 			{
 				SqlConnection conn = new(ConnectionString);
@@ -402,7 +402,7 @@ namespace TwitterBot
 		}
 		private static void UpdateSpaceUrlToProcessEntry(Bot bot)
 		{
-#if !DEBUG
+#if DEBUG
 			try
 			{
 				SqlConnection conn = new(ConnectionString);
@@ -504,7 +504,7 @@ namespace TwitterBot
 		{
 			string preciseSelector = "DISTINCT";
 #if DEBUG
-			preciseSelector = "TOP 5";
+			preciseSelector = "TOP 1";
 #endif
 			List<Bot> bots = [];
 			try
@@ -571,9 +571,9 @@ namespace TwitterBot
 			NetworkInterceptor = driver.Manage().Network;
 			NetworkInterceptor.AddAuthenticationHandler(handler);
 			NetworkInterceptor.StartMonitoring();
+#endif
 			bot.ProcessId = svc.ProcessId;
 			SaveProcessId(bot);
-#endif
 			return driver;
 		}
 		private static IWebElement WaitUntilElementClickable(ChromeDriver driver, By elementLocator, int timeout = 10)
