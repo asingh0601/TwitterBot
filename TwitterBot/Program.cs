@@ -313,24 +313,25 @@ namespace TwitterBot
 
 			try
 			{
+				var rnd = new Random();
 				WaitUntilElementClickable(driver, moreOptionsLocator);
 				var moreOptions = driver.FindElement(moreOptionsLocator);
 				moreOptions.Click();
-				Thread.Sleep(3500);
+				Thread.Sleep(rnd.Next(2000, 4500));
 
 				WaitUntilElementClickable(driver, reportSpaceLocator);
 				var reportSpace = driver.FindElement(reportSpaceLocator);
 				reportSpace.Click();
-				Thread.Sleep(2500);
+				Thread.Sleep(rnd.Next(2000, 4500));
 
 				WaitUntilElementClickable(driver, violenceOptionLocator);
 				var violenceOption = driver.FindElement(violenceOptionLocator);
 				violenceOption.Click();
-				Thread.Sleep(3300);
+				Thread.Sleep(rnd.Next(2000, 4500));
 
 				WaitUntilElementClickable(driver, leaveButtonLocator);
 				var leaveButton = driver.FindElement(leaveButtonLocator);
-				leaveButton.Click();
+				Thread.Sleep(rnd.Next(2000, 4500));
 			}
 			finally
 			{
