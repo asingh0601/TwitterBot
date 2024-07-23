@@ -655,7 +655,7 @@ namespace TwitterBot
 
 			foreach (string newPath in Directory.GetFiles(sourcePath, "*.*", SearchOption.AllDirectories))
 			{
-				FileCopy(newPath, newPath.Replace(sourcePath, targetPath);
+				FileCopy(newPath, newPath.Replace(sourcePath, targetPath));
 			}
 		}
 
