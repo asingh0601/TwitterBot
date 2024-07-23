@@ -629,8 +629,12 @@ namespace TwitterBot
 			if (Directory.Exists(bot.UserDataDirectory))
 			{
 				var dir = new DirectoryInfo(bot.UserDataDirectory);
-				dir.Delete(true);
-				dir.Parent?.Delete();
+				try
+				{
+					dir.Delete(true);
+					dir.Parent?.Delete();
+				}
+				catch { }
 			}
 			NetworkInterceptor?.StopMonitoring();
 			driver.Close();
