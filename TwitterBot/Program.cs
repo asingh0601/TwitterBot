@@ -386,7 +386,7 @@ namespace TwitterBot
 		#region helpermethods
 		private static void SaveProcessId(Bot bot)
 		{
-#if DEBUG
+#if !DEBUG
 			try
 			{
 				SqlConnection conn = new(ConnectionString);
@@ -402,12 +402,12 @@ namespace TwitterBot
 		}
 		private static void UpdateSpaceUrlToProcessEntry(Bot bot)
 		{
-#if DEBUG
+#if !DEBUG
 			try
 			{
 				SqlConnection conn = new(ConnectionString);
 				conn.Open();
-				var sqlQuery = $"UPDATE [dbo].[SpaceProcessIds] SET Url = {TwitterTargetUrl}, LoginSuccessful = 1 Where ProcessId = '{bot.ProcessId}' AND UserName = '{bot.TwitterUserName}'";
+				var sqlQuery = $"UPDATE [dbo].[SpaceProcessIds] SET Url = '{TwitterTargetUrl}', LoginSuccessful = 1 Where ProcessId = '{bot.ProcessId}' AND UserName = '{bot.TwitterUserName}'";
 
 				using SqlCommand command = new(sqlQuery, conn);
 				var result = command.ExecuteNonQuery();
@@ -633,6 +633,8 @@ namespace TwitterBot
 				dir.Parent?.Delete();
 			}
 			NetworkInterceptor?.StopMonitoring();
+			driver.Close();
+			driver.Quit();
 			driver.Dispose();
 			Thread.Yield();
 		}
