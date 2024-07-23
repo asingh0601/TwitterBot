@@ -46,6 +46,8 @@ namespace TwitterBot
 				}
 			}
 			Bots = GetBotsFromDb();
+			var timeStampString = $"{DateTime.Now:yyyyMMddHHmmssffff}";
+
 			Action<Bot>? function = null;
 			switch (taskType)
 			{
@@ -66,9 +68,23 @@ namespace TwitterBot
 					break;
 			}
 			var tasks = new List<Task>();
-			for (int i = 0; i < Bots.Count; i++)
+			foreach (var bot in Bots)
 			{
-				var bot = Bots[i];
+				var masterDirPath = @$"C:\TwitterBotChromeProfiles\master\{bot.TwitterUserName}";
+				var rootPath = $@"C:\TwitterBotChromeProfiles\{timeStampString}";
+				bot.UserDataDirectory = @$"{rootPath}\{bot.TwitterUserName}";
+				if (Directory.Exists(masterDirPath))
+				{
+					bot.MasterUserDataExists = true;
+					Directory.CreateDirectory(rootPath);
+					Directory.CreateDirectory(bot.UserDataDirectory);
+					CopyFilesRecursively(masterDirPath, bot.UserDataDirectory);
+				}
+				else
+				{
+					bot.MasterUserDataExists = false;
+				}
+
 				if (function is not null)
 				{
 					tasks.Add(Task.Factory.StartNew(() => function(bot)));
@@ -88,15 +104,15 @@ namespace TwitterBot
 				{
 					WaitUntilElementClickable(driver, profileIconLocator);
 					Console.WriteLine($"{bot.TwitterUserName} has logged in to twitter.");
+					bot.LoginSuccessful = true;
 					return true;
 				}
 				catch
 				{
 					if (!CheckAndMarkIdSuspended(driver, bot) || !CheckAndMarkIdLocked(driver, bot) || !CheckAndMarkEmailVerification(driver, bot))
 					{
-						NetworkInterceptor?.StopMonitoring();
-						driver.Dispose();
-						Thread.Yield();
+						bot.LoginSuccessful = false;
+						SafelyExitBotInstance(driver, bot);
 						return false;
 					}
 					throw;
@@ -149,22 +165,20 @@ namespace TwitterBot
 					catch (Exception) { }
 					if (!CheckAndMarkIdSuspended(driver, bot) || !CheckAndMarkIdLocked(driver, bot) || !CheckAndMarkEmailVerification(driver, bot))
 					{
-						NetworkInterceptor?.StopMonitoring();
-						driver.Dispose();
-						Thread.Yield();
+						SafelyExitBotInstance(driver, bot);
 						return false;
 					}
 					WaitUntilElementClickable(driver, profileIconLocator);
 					Console.WriteLine($"{bot.TwitterUserName} has logged in to twitter.");
+					bot.LoginSuccessful = true;
 					return true;
 				}
 				catch (Exception)
 				{
 					Console.WriteLine($"{bot.TwitterUserName} could not log in to twitter.");
 					MarkLoginFailure(bot);
-					NetworkInterceptor?.StopMonitoring();
-					driver.Dispose();
-					Thread.Yield();
+					SafelyExitBotInstance(driver, bot);
+					bot.LoginSuccessful = false;
 					return false;
 				}
 			}
@@ -219,9 +233,7 @@ namespace TwitterBot
 			}
 			finally
 			{
-				NetworkInterceptor?.StopMonitoring();
-				driver.Dispose();
-				Thread.Yield();
+				SafelyExitBotInstance(driver, bot);
 			}
 		}
 		private static void FollowBot(Bot bot)
@@ -250,9 +262,7 @@ namespace TwitterBot
 			}
 			finally
 			{
-				NetworkInterceptor?.StopMonitoring();
-				driver.Dispose();
-				Thread.Yield();
+				SafelyExitBotInstance(driver, bot);
 			}
 		}
 		private static void RunTwitterSpacesBot(Bot bot)
@@ -276,9 +286,7 @@ namespace TwitterBot
 			}
 			finally
 			{
-				NetworkInterceptor?.StopMonitoring();
-				driver.Dispose();
-				Thread.Yield();
+				SafelyExitBotInstance(driver, bot);
 			}
 		}
 		private static void JoinTwitterSpace(Bot bot)
@@ -287,9 +295,7 @@ namespace TwitterBot
 			JoinTwitterSpace(bot, driver);
 			Task.Delay(15 * 60 * 1000).ContinueWith((task) =>
 			{
-				NetworkInterceptor?.StopMonitoring();
-				driver.Dispose();
-				Thread.Yield();
+				SafelyExitBotInstance(driver, bot);
 			});
 		}
 		private static void JoinTwitterSpaceAndLaugh(Bot bot)
@@ -298,9 +304,7 @@ namespace TwitterBot
 			JoinTwitterSpace(bot, driver);
 			Task.Delay(15 * 60 * 1000).ContinueWith((task) =>
 			{
-				NetworkInterceptor?.StopMonitoring();
-				driver.Dispose();
-				Thread.Yield();
+				SafelyExitBotInstance(driver, bot);
 			});
 		}
 		private static bool JoinTwitterSpace(Bot bot, ChromeDriver driver)
@@ -378,17 +382,19 @@ namespace TwitterBot
 		#region helpermethods
 		private static void SaveProcessId(Bot bot)
 		{
+#if !DEBUG
 			try
 			{
 				SqlConnection conn = new(ConnectionString);
 				conn.Open();
-				var sqlQuery = $"INSERT INTO [dbo].[SpaceProcessIds] ([ProcessDate],[CommandUserName],[UserName],[Url],[ProcessId],[ProcessKilled]) VALUES ('{DateTime.Now:yyyy-MM-dd HH:mm:ss}','{CommandUserName}','{bot.TwitterUserName}','{TwitterTargetUrl}',{bot.ProcessId},0)";
+				var sqlQuery = $"INSERT INTO [dbo].[SpaceProcessIds] ([ProcessDate],[CommandUserName],[UserName],[Directory],[Url],[ProcessId],[ProcessKilled]) VALUES ('{DateTime.Now:yyyy-MM-dd HH:mm:ss}','{CommandUserName}','{bot.TwitterUserName}','{bot.UserDataDirectory}','{TwitterTargetUrl}',{bot.ProcessId},0)";
 
 				using SqlCommand command = new(sqlQuery, conn);
 				var result = command.ExecuteNonQuery();
 				conn.Close();
 			}
 			catch (Exception) { }
+#endif
 		}
 		private static void UpdateSpaceUrlToProcessEntry(Bot bot)
 		{
@@ -501,7 +507,7 @@ namespace TwitterBot
 			{
 				SqlConnection conn = new(ConnectionString);
 				conn.Open();
-				var sqlQuery = $"SELECT {preciseSelector} UserName, EmailId, Password FROM BotDetails WHERE LoginFailure < 3 AND EmailVerificationRequired = 0 AND IdSuspended = 0 AND IdLocked = 0";
+				var sqlQuery = $"SELECT {preciseSelector} UserName, EmailId, Password FROM BotDetails WHERE LoginFailure < 3 AND IdDisabled = 0 AND IdSuspended = 0 AND IdLocked = 0";
 
 				using SqlCommand command = new(sqlQuery, conn);
 				var result = command.ExecuteReader();
@@ -544,7 +550,7 @@ namespace TwitterBot
 				"disable-web-security",
 				"ignore-certificate-errors",
 				"--blink-settings=imagesEnabled=false",
-				@$"--user-data-dir=C:\temp\{bot.TwitterUserName}",
+				@$"--user-data-dir={bot.UserDataDirectory}",
 			}
 			);
 
@@ -589,6 +595,40 @@ namespace TwitterBot
 				Console.WriteLine("Element with locator: '" + elementLocator + "' was not found in current context page.");
 				throw;
 			}
+		}
+
+		private static void CopyFilesRecursively(string sourcePath, string targetPath)
+		{
+			foreach (string dirPath in Directory.GetDirectories(sourcePath, "*", SearchOption.AllDirectories))
+			{
+				Directory.CreateDirectory(dirPath.Replace(sourcePath, targetPath));
+			}
+
+			foreach (string newPath in Directory.GetFiles(sourcePath, "*.*", SearchOption.AllDirectories))
+			{
+				File.Copy(newPath, newPath.Replace(sourcePath, targetPath), true);
+			}
+		}
+
+		private static void SafelyExitBotInstance(ChromeDriver driver, Bot bot)
+		{
+			if (!bot.MasterUserDataExists && bot.LoginSuccessful)
+			{
+				if (Directory.Exists(bot.UserDataDirectory))
+				{
+					Directory.CreateDirectory(@$"C:\TwitterBotChromeProfiles\master\{bot.TwitterUserName}");
+					CopyFilesRecursively(bot.UserDataDirectory, @$"C:\TwitterBotChromeProfiles\master\{bot.TwitterUserName}");
+				}
+			}
+			if (Directory.Exists(bot.UserDataDirectory))
+			{
+				var dir = new DirectoryInfo(bot.UserDataDirectory);
+				dir.Delete(true);
+				dir.Parent?.Delete();
+			}
+			NetworkInterceptor?.StopMonitoring();
+			driver.Dispose();
+			Thread.Yield();
 		}
 		#endregion
 	}

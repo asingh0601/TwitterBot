@@ -10,5 +10,11 @@ namespace TwitterBot
 		public string TwitterPassword { get; set; }
 		[NotMapped ]
 		public long? ProcessId { get; set; }
+		[NotMapped]
+		public string UserDataDirectory { get; set; }
+		[NotMapped]
+		public bool LoginSuccessful { get; set; }
+		[NotMapped]
+		public bool MasterUserDataExists { get; set; }
 	}
 }
