@@ -4,6 +4,9 @@ using OpenQA.Selenium.Interactions;
 using OpenQA.Selenium.Support.UI;
 using System;
 using System.Data.SqlClient;
+using System.Net.Http.Json;
+using System.Net.NetworkInformation;
+using static System.Runtime.InteropServices.JavaScript.JSType;
 
 namespace TwitterBot
 {
@@ -29,6 +32,7 @@ namespace TwitterBot
 
 		static void Main(string[] args)
 		{
+			var workingProxies = GetProxies().Result;
 			TwitterTargetUrl = args[1];
 			var taskType = args[0];
 			var otherCommands = args.Skip(2).ToArray();
@@ -89,6 +93,26 @@ namespace TwitterBot
 				else
 				{
 					bot.MasterUserDataExists = false;
+				}
+				if (workingProxies.Count == 0)
+				{
+					bot.Proxy = new()
+					{
+						Kind = ProxyKind.Manual,
+						IsAutoDetect = false,
+						SslProxy = $"{Configuration.ProxyIp}:{Configuration.ProxyPort}",
+						HttpProxy = $"{Configuration.ProxyIp}:{Configuration.ProxyPort}"
+					};
+					bot.ProxyAuthRequired = true;
+				}
+				else
+				{
+					bot.Proxy = new()
+					{
+						Kind = ProxyKind.Manual,
+						IsAutoDetect = false,
+						HttpProxy = $"{workingProxies[new Random().Next(0, workingProxies.Count - 1)]}"
+					};
 				}
 
 				if (function is not null)
@@ -202,16 +226,23 @@ namespace TwitterBot
 					driver.Navigate().GoToUrl(TwitterTargetUrl);
 					try
 					{
+						var rnd = new Random();
 						var likeButtonLocator = By.XPath(@"(//button[@data-testid=""like""])[1]");
 						WaitUntilElementClickable(driver, likeButtonLocator);
 						var jse = (IJavaScriptExecutor)driver;
 						jse.ExecuteScript("window.scrollBy(0,250)");
-						Thread.Sleep(1000);
+						Thread.Sleep(1800);
 						jse.ExecuteScript("window.scrollBy(0,-240)");
-						Thread.Sleep(new Random().Next(1000, 240000));
+						Actions action = new(driver);
+						action.MoveByOffset(rnd.Next(1, 50), rnd.Next(1, 50)).Click().Build().Perform();
+						Thread.Sleep(3000);
+						action.MoveByOffset(rnd.Next(1, 100), rnd.Next(1, 100)).Click().Build().Perform();
+						Thread.Sleep(1000);
+						action.MoveByOffset(rnd.Next(1, 100), rnd.Next(1, 100)).Click().Build().Perform();
+						Thread.Sleep(rnd.Next(1000, 240000));
 						var likeButton = driver.FindElement(likeButtonLocator);
 						likeButton.Click();
-						Thread.Sleep(1000);
+						Thread.Sleep(3500);
 
 						var retweetButtonLocator = By.XPath(@"(//button[@data-testid=""retweet""])[1]");
 						var repostOptionLocator = By.XPath(@"//span[text()='Repost']");
@@ -225,12 +256,13 @@ namespace TwitterBot
 						Thread.Sleep(1000);
 
 						jse.ExecuteScript("window.scrollBy(0,350)");
-						Thread.Sleep(1000);
+						Thread.Sleep(4000);
 						jse.ExecuteScript("window.scrollBy(0,-280)");
 						Console.WriteLine($"{MSG_IDENTIFIER}{bot.TwitterUserName} has liked & retweeted the target tweet.");
 						Thread.Sleep(3000);
 					}
-					catch (Exception) {
+					catch (Exception)
+					{
 						Console.WriteLine($"{MSG_IDENTIFIER}{bot.TwitterUserName} could not like & retweet the target tweet.");
 					}
 				}
@@ -568,20 +600,11 @@ namespace TwitterBot
 		{
 			var userAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36";
 			var platform = "Win32";
-#if !DEBUG
-			Proxy proxy = new()
-			{
-				Kind = ProxyKind.Manual,
-				IsAutoDetect = false,
-				SslProxy = $"{Configuration.ProxyIp}:{Configuration.ProxyPort}",
-				HttpProxy = $"{Configuration.ProxyIp}:{Configuration.ProxyPort}"
-			};
-#endif
 			var svc = ChromeDriverService.CreateDefaultService();
 			var chromeOptions = new ChromeOptions
 			{
 #if !DEBUG
-				Proxy = proxy
+				Proxy = bot.Proxy
 #endif
 			};
 			chromeOptions.AddArguments(new List<string>()
@@ -611,15 +634,18 @@ namespace TwitterBot
 			driver.ExecuteScript($"Object.defineProperty(navigator, 'platform', {{get: () =>  {platform}}})");
 			driver.ExecuteScript("Object.defineProperty(navigator, 'plugins', {get: () => [1, 2, 3, 4, 5]})");
 #if !DEBUG
-			NetworkAuthenticationHandler handler = new()
+			if (bot.ProxyAuthRequired)
 			{
-				UriMatcher = d => true, //d.Host.Contains("your-host.com")
-				Credentials = new PasswordCredentials(Configuration.ProxyUserName, Configuration.ProxyPassword)
-			};
+				NetworkAuthenticationHandler handler = new()
+				{
+					UriMatcher = d => true, //d.Host.Contains("your-host.com")
+					Credentials = new PasswordCredentials(Configuration.ProxyUserName, Configuration.ProxyPassword)
+				};
 
-			NetworkInterceptor = driver.Manage().Network;
-			NetworkInterceptor.AddAuthenticationHandler(handler);
-			NetworkInterceptor.StartMonitoring();
+				NetworkInterceptor = driver.Manage().Network;
+				NetworkInterceptor.AddAuthenticationHandler(handler);
+				NetworkInterceptor.StartMonitoring();
+			}
 #endif
 			bot.ProcessId = svc.ProcessId;
 			SaveProcessId(bot);
@@ -722,6 +748,48 @@ namespace TwitterBot
 				Thread.Yield();
 			}
 			catch { }
+		}
+
+		private static async Task<List<string>> GetProxies()
+		{
+			List<string> workingProxies = [];
+#if !DEBUG
+			var client = new HttpClient();
+			var response = await client.GetFromJsonAsync<ProxyResponse>("https://api.proxyscrape.com/v3/free-proxy-list/get?request=displayproxies&country=in&proxy_format=protocolipport&format=json");
+			var tasks = new List<Task>();
+			foreach (var proxy in response?.Proxies ?? [])
+			{
+				if (!proxy.Proxy.Contains("socks"))
+				{
+					tasks.Add(Task.Factory.StartNew(() =>
+					{
+						if (CanPing(proxy.Ip))
+						{
+							workingProxies.Add(proxy.Proxy);
+						}
+					}));
+				}
+			}
+			Task.WaitAll([.. tasks]);
+#endif
+			return workingProxies;
+		}
+
+		private static bool CanPing(string address)
+		{
+			Ping ping = new();
+
+			try
+			{
+				PingReply reply = ping.Send(address, 2000);
+				if (reply == null) return false;
+
+				return (reply.Status == IPStatus.Success);
+			}
+			catch
+			{
+				return false;
+			}
 		}
 		#endregion
 	}

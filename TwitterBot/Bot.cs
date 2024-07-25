@@ -1,4 +1,5 @@
-﻿using System.ComponentModel;
+﻿using OpenQA.Selenium;
+using System.ComponentModel;
 using System.ComponentModel.DataAnnotations.Schema;
 
 namespace TwitterBot
@@ -16,5 +17,9 @@ namespace TwitterBot
 		public bool LoginSuccessful { get; set; }
 		[NotMapped]
 		public bool MasterUserDataExists { get; set; }
+		[NotMapped]
+		public Proxy Proxy { get; set; }
+		[NotMapped]
+		public bool ProxyAuthRequired { get; set; }
 	}
 }
