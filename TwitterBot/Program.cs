@@ -6,6 +6,7 @@ using System;
 using System.Data.SqlClient;
 using System.Net.Http.Json;
 using System.Net.NetworkInformation;
+using System.Net.Sockets;
 using static System.Runtime.InteropServices.JavaScript.JSType;
 
 namespace TwitterBot
@@ -109,11 +110,13 @@ namespace TwitterBot
 				}
 				else
 				{
+					var proxy = $"{workingProxies[new Random().Next(0, workingProxies.Count - 1)]}";
 					bot.Proxy = new()
 					{
 						Kind = ProxyKind.Manual,
 						IsAutoDetect = false,
-						HttpProxy = $"{workingProxies[new Random().Next(0, workingProxies.Count - 1)]}"
+						SslProxy = proxy,
+						HttpProxy = proxy
 					};
 				}
 
@@ -570,14 +573,14 @@ namespace TwitterBot
 		{
 			string preciseSelector = "DISTINCT";
 #if DEBUG
-			preciseSelector = "TOP 3";
+			preciseSelector = "TOP 1";
 #endif
 			List<Bot> bots = [];
 			try
 			{
 				SqlConnection conn = new(ConnectionString);
 				conn.Open();
-				var sqlQuery = $"SELECT {preciseSelector} UserName, EmailId, Password FROM BotDetails WHERE LoginFailure < 3 AND IdDisabled = 0 AND IdSuspended = 0 AND IdLocked = 0";
+				var sqlQuery = $"SELECT {preciseSelector} UserName, EmailId, Password FROM BotDetails WHERE Username='Stroke9genius18' AND LoginFailure < 3 AND IdDisabled = 0 AND IdSuspended = 0 AND IdLocked = 0";
 
 				using SqlCommand command = new(sqlQuery, conn);
 				var result = command.ExecuteReader();
@@ -598,9 +601,7 @@ namespace TwitterBot
 			var svc = ChromeDriverService.CreateDefaultService();
 			var chromeOptions = new ChromeOptions
 			{
-#if !DEBUG
 				Proxy = bot.Proxy
-#endif
 			};
 			chromeOptions.AddArguments(new List<string>()
 			{
@@ -628,7 +629,7 @@ namespace TwitterBot
 			driver.ExecuteScript("Object.defineProperty(navigator, 'languages', {get: () => ['en-US', 'en']})");
 			driver.ExecuteScript($"Object.defineProperty(navigator, 'platform', {{get: () =>  {platform}}})");
 			driver.ExecuteScript("Object.defineProperty(navigator, 'plugins', {get: () => [1, 2, 3, 4, 5]})");
-#if !DEBUG
+
 			if (bot.ProxyAuthRequired)
 			{
 				NetworkAuthenticationHandler handler = new()
@@ -641,7 +642,6 @@ namespace TwitterBot
 				NetworkInterceptor.AddAuthenticationHandler(handler);
 				NetworkInterceptor.StartMonitoring();
 			}
-#endif
 			bot.ProcessId = svc.ProcessId;
 			SaveProcessId(bot);
 			return driver;
@@ -748,7 +748,6 @@ namespace TwitterBot
 		private static async Task<List<string>> GetProxies()
 		{
 			List<string> workingProxies = [];
-#if !DEBUG
 			var client = new HttpClient();
 			var response = await client.GetFromJsonAsync<ProxyResponse>("https://api.proxyscrape.com/v3/free-proxy-list/get?request=displayproxies&country=in&proxy_format=protocolipport&format=json");
 			var tasks = new List<Task>();
@@ -758,7 +757,7 @@ namespace TwitterBot
 				{
 					tasks.Add(Task.Factory.StartNew(() =>
 					{
-						if (CanPing(proxy.Ip))
+						if (IsReachable(proxy.Ip, proxy.Port))
 						{
 							workingProxies.Add(proxy.Proxy);
 						}
@@ -766,20 +765,27 @@ namespace TwitterBot
 				}
 			}
 			Task.WaitAll([.. tasks]);
-#endif
 			return workingProxies;
 		}
 
-		private static bool CanPing(string address)
+		private static bool IsReachable(string ip, int port)
 		{
-			Ping ping = new();
-
 			try
 			{
-				PingReply reply = ping.Send(address, 2000);
-				if (reply == null) return false;
-
-				return (reply.Status == IPStatus.Success);
+				TcpClient? tc = null;
+				try
+				{
+					tc = new TcpClient(ip, port);
+					return true;
+				}
+				catch
+				{
+					return false;
+				}
+				finally
+				{
+					tc?.Close();
+				}
 			}
 			catch
 			{
