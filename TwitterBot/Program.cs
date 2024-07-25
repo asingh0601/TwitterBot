@@ -546,7 +546,7 @@ namespace TwitterBot
 		{
 			string preciseSelector = "DISTINCT";
 #if DEBUG
-			preciseSelector = "DISTINCT";
+			preciseSelector = "TOP 1";
 #endif
 			List<Bot> bots = [];
 			try
@@ -569,6 +569,8 @@ namespace TwitterBot
 		}
 		private static ChromeDriver GetChromeDriver(Bot bot)
 		{
+			var userAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36";
+			var platform = "Win32";
 #if !DEBUG
 			Proxy proxy = new()
 			{
@@ -590,23 +592,27 @@ namespace TwitterBot
 #if !DEBUG
 				"--headless=new",
 #endif
+				$"user-agent={userAgent}",
 				"no-sandbox",
 				"start-maximized",
 				"disable-notifications",
 				"disable-web-security",
+				"--disable-xss-auditor",
 				"ignore-certificate-errors",
-#if !DEBUG
-				"--blink-settings=imagesEnabled=false",
-#endif
 				"--disable-blink-features=AutomationControlled",
 				@$"--user-data-dir={bot.UserDataDirectory}",
 			});
 
 			chromeOptions.AddExcludedArgument("enable-automation");
+			chromeOptions.AddExcludedArgument("load-extension");
+			chromeOptions.AddExcludedArgument("enable-logging");
 			chromeOptions.AddAdditionalChromeOption("useAutomationExtension", false);
 
 			var driver = new ChromeDriver(svc, chromeOptions);
 			driver.ExecuteScript("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})");
+			driver.ExecuteScript("Object.defineProperty(navigator, 'languages', {get: () => ['en-US', 'en']})");
+			driver.ExecuteScript($"Object.defineProperty(navigator, 'platform', {{get: () =>  {platform}}})");
+			driver.ExecuteScript("Object.defineProperty(navigator, 'plugins', {get: () => [1, 2, 3, 4, 5]})");
 #if !DEBUG
 			NetworkAuthenticationHandler handler = new()
 			{
