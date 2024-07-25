@@ -2,6 +2,7 @@
 using OpenQA.Selenium.Chrome;
 using OpenQA.Selenium.Interactions;
 using OpenQA.Selenium.Support.UI;
+using System;
 using System.Data.SqlClient;
 
 namespace TwitterBot
@@ -23,6 +24,7 @@ namespace TwitterBot
 		private static int SpaceJoinIntervalOffset = 0;
 		private static string? CommandUserName;
 		private static INetwork? NetworkInterceptor;
+		private static readonly string MSG_IDENTIFIER = "BOT_RESPONSE: ";
 		#endregion
 
 		static void Main(string[] args)
@@ -107,7 +109,7 @@ namespace TwitterBot
 				try
 				{
 					WaitUntilElementClickable(driver, profileIconLocator);
-					Console.WriteLine($"{bot.TwitterUserName} has logged in to twitter.");
+					Console.WriteLine($"{MSG_IDENTIFIER}{bot.TwitterUserName} has logged in to twitter.");
 					bot.LoginSuccessful = true;
 					return true;
 				}
@@ -173,13 +175,13 @@ namespace TwitterBot
 						return false;
 					}
 					WaitUntilElementClickable(driver, profileIconLocator);
-					Console.WriteLine($"{bot.TwitterUserName} has logged in to twitter.");
+					Console.WriteLine($"{MSG_IDENTIFIER}{bot.TwitterUserName} has logged in to twitter.");
 					bot.LoginSuccessful = true;
 					return true;
 				}
 				catch (Exception)
 				{
-					Console.WriteLine($"{bot.TwitterUserName} could not log in to twitter.");
+					Console.WriteLine($"{MSG_IDENTIFIER}{bot.TwitterUserName} could not log in to twitter.");
 					MarkLoginFailure(bot);
 					SafelyExitBotInstance(driver, bot);
 					bot.LoginSuccessful = false;
@@ -225,14 +227,14 @@ namespace TwitterBot
 						jse.ExecuteScript("window.scrollBy(0,350)");
 						Thread.Sleep(1000);
 						jse.ExecuteScript("window.scrollBy(0,-280)");
-						Console.WriteLine($"{bot.TwitterUserName} has liked & retweeted the target tweet.");
+						Console.WriteLine($"{MSG_IDENTIFIER}{bot.TwitterUserName} has liked & retweeted the target tweet.");
 						Thread.Sleep(3000);
 					}
 					catch (Exception) { }
 				}
 				else
 				{
-					Console.WriteLine($"{bot.TwitterUserName} could not like & retweet target tweet.");
+					Console.WriteLine($"{MSG_IDENTIFIER}{bot.TwitterUserName} could not like & retweet target tweet.");
 				}
 			}
 			finally
@@ -255,13 +257,13 @@ namespace TwitterBot
 						WaitUntilElementClickable(driver, followButtonLocator);
 						var followButton = driver.FindElement(followButtonLocator);
 						followButton.Click();
-						Console.WriteLine($"{bot.TwitterUserName} has followed the target.");
+						Console.WriteLine($"{MSG_IDENTIFIER}{bot.TwitterUserName} has followed the target.");
 					}
 					catch (Exception) { }
 				}
 				else
 				{
-					Console.WriteLine($"{bot.TwitterUserName} could not follow target.");
+					Console.WriteLine($"{MSG_IDENTIFIER}{bot.TwitterUserName} could not follow target.");
 				}
 			}
 			finally
@@ -276,12 +278,12 @@ namespace TwitterBot
 			{
 				if (LoginToTwitter(driver, bot))
 				{
-					Console.WriteLine($"{bot.TwitterUserName} has logged in to twitter.");
+					Console.WriteLine($"{MSG_IDENTIFIER}{bot.TwitterUserName} has logged in to twitter.");
 					for (int i = 0; i < 1000; i++)
 					{
 						if (JoinTwitterSpace(bot, driver))
 						{
-							Console.WriteLine($"{bot.TwitterUserName} has joined twitter space.");
+							Console.WriteLine($"{MSG_IDENTIFIER}{bot.TwitterUserName} has joined twitter space.");
 							Thread.Sleep(new Random().Next(120000, 240000) + (SpaceJoinIntervalOffset * 1000));
 						}
 					}
@@ -388,7 +390,7 @@ namespace TwitterBot
 				}
 				catch (Exception)
 				{
-					Console.WriteLine($"{bot.TwitterUserName} could not join twitter space.");
+					Console.WriteLine($"{MSG_IDENTIFIER}{bot.TwitterUserName} could not join twitter space.");
 				}
 			}
 			return false;
@@ -544,7 +546,7 @@ namespace TwitterBot
 		{
 			string preciseSelector = "DISTINCT";
 #if DEBUG
-			preciseSelector = "TOP 1";
+			preciseSelector = "DISTINCT";
 #endif
 			List<Bot> bots = [];
 			try
@@ -629,7 +631,7 @@ namespace TwitterBot
 			}
 			catch (NoSuchElementException)
 			{
-				Console.WriteLine("Element with locator: '" + elementLocator + "' was not found in current context page.");
+				Console.WriteLine($"{MSG_IDENTIFIER}Element with locator: '{elementLocator}' was not found in current context page.");
 				throw;
 			}
 		}
@@ -642,7 +644,7 @@ namespace TwitterBot
 			}
 			catch (NoSuchElementException)
 			{
-				Console.WriteLine("Element with locator: '" + elementLocator + "' was not found in current context page.");
+				Console.WriteLine($"{MSG_IDENTIFIER}Element with locator: '{elementLocator}' was not found in current context page.");
 				throw;
 			}
 		}
@@ -708,11 +710,15 @@ namespace TwitterBot
 				}
 				catch { }
 			}
-			NetworkInterceptor?.StopMonitoring();
-			driver.Close();
-			driver.Quit();
-			driver.Dispose();
-			Thread.Yield();
+			try
+			{
+				NetworkInterceptor?.StopMonitoring();
+				driver.Close();
+				driver.Quit();
+				driver.Dispose();
+				Thread.Yield();
+			}
+			catch { }
 		}
 		#endregion
 	}
