@@ -53,6 +53,8 @@ namespace TwitterBot
 				}
 			}
 			Bots = GetBotsFromDb();
+
+			Console.WriteLine($"{MSG_IDENTIFIER}{Bots.Count} bots summoned. Total of {(workingProxies.Count == 0 ? 1 : workingProxies.Count)} proxies would be used.");
 			var timeStampString = $"{DateTime.Now:yyyyMMddHHmmssffff}";
 
 			Action<Bot>? function = null;
@@ -307,14 +309,10 @@ namespace TwitterBot
 			{
 				if (LoginToTwitter(driver, bot))
 				{
-					Console.WriteLine($"{MSG_IDENTIFIER}{bot.TwitterUserName} has logged in to twitter.");
 					for (int i = 0; i < 1000; i++)
 					{
-						if (JoinTwitterSpace(bot, driver))
-						{
-							Console.WriteLine($"{MSG_IDENTIFIER}{bot.TwitterUserName} has joined twitter space.");
-							Thread.Sleep(new Random().Next(120000, 240000) + (SpaceJoinIntervalOffset * 1000));
-						}
+						JoinTwitterSpace(bot, driver);
+						Thread.Sleep(new Random().Next(120000, 240000) + (SpaceJoinIntervalOffset * 1000));
 					}
 
 				}
@@ -386,27 +384,24 @@ namespace TwitterBot
 		{
 			try
 			{
-				if (LoginToTwitter(driver, bot))
+				driver.Navigate().GoToUrl(TwitterTargetUrl);
+				var startListeningButtonLocator = AnonymousMode ? By.XPath(@"//span[text()='Start listening anonymously']") : By.XPath(@"//span[text()='Start listening']");
+				var anonymousToggleLocator = By.XPath(@"//input[@type='checkbox']");
+				if (AnonymousMode)
 				{
-					driver.Navigate().GoToUrl(TwitterTargetUrl);
-					var startListeningButtonLocator = AnonymousMode ? By.XPath(@"//span[text()='Start listening anonymously']") : By.XPath(@"//span[text()='Start listening']");
-					var anonymousToggleLocator = By.XPath(@"//input[@type='checkbox']");
-					if (AnonymousMode)
-					{
-						WaitUntilElementClickable(driver, anonymousToggleLocator);
-						var anonymousButton = driver.FindElement(anonymousToggleLocator);
-						anonymousButton.Click();
-					}
-					WaitUntilElementClickable(driver, startListeningButtonLocator);
-					var startListeningButton = driver.FindElement(startListeningButtonLocator);
-					startListeningButton.Click();
-					var gotItButtonLocator = By.XPath(@"//span[text()='Got it']");
-					WaitUntilElementClickable(driver, gotItButtonLocator);
-					var gotItButton = driver.FindElement(gotItButtonLocator);
-					gotItButton.Click();
-					UpdateSpaceUrlToProcessEntry(bot);
-					return true;
+					WaitUntilElementClickable(driver, anonymousToggleLocator);
+					var anonymousButton = driver.FindElement(anonymousToggleLocator);
+					anonymousButton.Click();
 				}
+				WaitUntilElementClickable(driver, startListeningButtonLocator);
+				var startListeningButton = driver.FindElement(startListeningButtonLocator);
+				startListeningButton.Click();
+				var gotItButtonLocator = By.XPath(@"//span[text()='Got it']");
+				WaitUntilElementClickable(driver, gotItButtonLocator);
+				var gotItButton = driver.FindElement(gotItButtonLocator);
+				gotItButton.Click();
+				UpdateSpaceUrlToProcessEntry(bot);
+				return true;
 			}
 			catch (Exception)
 			{
@@ -575,7 +570,7 @@ namespace TwitterBot
 		{
 			string preciseSelector = "DISTINCT";
 #if DEBUG
-			preciseSelector = "TOP 1";
+			preciseSelector = "TOP 3";
 #endif
 			List<Bot> bots = [];
 			try

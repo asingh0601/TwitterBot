@@ -2,7 +2,7 @@
   "profiles": {
     "TwitterBot": {
       "commandName": "Project",
-      "commandLineArgs": "/likeretweet https://x.com/aakhrinabi/status/1816342343769022892?s=46 -commandBy#theterminator07"
+      "commandLineArgs": "/rjoin https://x.com/i/spaces/1DXGydwyElkKM/peek -verbose -commandBy#theterminator07"
     }
   }
 }
