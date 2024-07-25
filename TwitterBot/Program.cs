@@ -230,11 +230,9 @@ namespace TwitterBot
 						Console.WriteLine($"{MSG_IDENTIFIER}{bot.TwitterUserName} has liked & retweeted the target tweet.");
 						Thread.Sleep(3000);
 					}
-					catch (Exception) { }
-				}
-				else
-				{
-					Console.WriteLine($"{MSG_IDENTIFIER}{bot.TwitterUserName} could not like & retweet target tweet.");
+					catch (Exception) {
+						Console.WriteLine($"{MSG_IDENTIFIER}{bot.TwitterUserName} could not like & retweet the target tweet.");
+					}
 				}
 			}
 			finally
@@ -259,11 +257,10 @@ namespace TwitterBot
 						followButton.Click();
 						Console.WriteLine($"{MSG_IDENTIFIER}{bot.TwitterUserName} has followed the target.");
 					}
-					catch (Exception) { }
-				}
-				else
-				{
-					Console.WriteLine($"{MSG_IDENTIFIER}{bot.TwitterUserName} could not follow target.");
+					catch (Exception)
+					{
+						Console.WriteLine($"{MSG_IDENTIFIER}{bot.TwitterUserName} could not follow target.");
+					}
 				}
 			}
 			finally
