@@ -1,12 +1,8 @@
-﻿using Microsoft.VisualBasic;
-using OpenQA.Selenium;
+﻿using OpenQA.Selenium;
 using OpenQA.Selenium.Chrome;
 using OpenQA.Selenium.Interactions;
 using OpenQA.Selenium.Support.UI;
-using RestSharp;
 using System.Data.SqlClient;
-using System.Diagnostics;
-using System.Net;
 using System.Net.Http.Json;
 using System.Net.Sockets;
 
@@ -608,7 +604,16 @@ namespace TwitterBot
 		}
 		private static ChromeDriver GetChromeDriver(Bot bot)
 		{
-			var userAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36";
+			var userAgents = new List<string> {
+				"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+				"Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36",
+				"Mozilla/5.0 (Windows NT 10.0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36",
+				"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36 Edg/126.0.2592.113",
+				"Mozilla/5.0 (Windows NT 10.0; WOW64; Trident/7.0; rv:11.0) like Gecko",
+				"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:128.0) Gecko/20100101 Firefox/128.0",
+				"Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36 Vivaldi/6.8.3381.48",
+				"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36 Vivaldi/6.8.3381.48"
+			};
 			var platform = "Win32";
 			var svc = ChromeDriverService.CreateDefaultService();
 			var chromeOptions = new ChromeOptions
@@ -620,7 +625,7 @@ namespace TwitterBot
 #if !DEBUG
 				"--headless=new",
 #endif
-				$"user-agent={userAgent}",
+				$"user-agent={userAgents[new Random().Next(0, userAgents.Count-1)]}",
 				"no-sandbox",
 				"start-maximized",
 				"disable-notifications",
