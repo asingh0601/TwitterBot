@@ -3,8 +3,8 @@ using OpenQA.Selenium.Chrome;
 using OpenQA.Selenium.Interactions;
 using OpenQA.Selenium.Support.UI;
 using System.Data.SqlClient;
+using System.Net;
 using System.Net.Http.Json;
-using System.Net.Sockets;
 
 namespace TwitterBot
 {
@@ -766,15 +766,19 @@ namespace TwitterBot
 		{
 			List<string> workingProxies = [];
 			var client = new HttpClient();
-			var response = await client.GetFromJsonAsync<ProxyResponse>("https://api.proxyscrape.com/v3/free-proxy-list/get?request=displayproxies&country=in&protocol=http&skip=0&proxy_format=protocolipport&format=json&limit=20&timeout=1000");
+			var response = await client.GetFromJsonAsync<ProxyResponse>("https://api.proxyscrape.com/v3/free-proxy-list/get?request=displayproxies&country=in&protocol=http&skip=0&proxy_format=protocolipport&format=json&limit=100&timeout=5000");
 			var tasks = new List<Task>();
 			foreach (var proxy in response?.Proxies ?? [])
 			{
 				tasks.Add(Task.Factory.StartNew(() =>
 				{
-					if (IsReachable(proxy.Ip, proxy.Port))
+					if (IsReachable(proxy.Ip, proxy.Port).Result)
 					{
-						workingProxies.Add(proxy.Proxy);
+						var proxyToAdd = $"{proxy.Ip}:{proxy.Port}";
+						if (!workingProxies.Contains(proxyToAdd))
+						{
+							workingProxies.Add(proxyToAdd);
+						}
 					}
 				}));
 			}
@@ -782,26 +786,28 @@ namespace TwitterBot
 			return workingProxies;
 		}
 
-		private static bool IsReachable(string ip, int port)
+		private static async Task<bool> IsReachable(string ip, int port)
 		{
 			try
 			{
-				TcpClient? tc = null;
-				try
+				var proxy = new WebProxy
 				{
-					tc = new TcpClient(ip, port);
-					return true;
-				}
-				catch
+					Address = new Uri($"http://{ip}:{port}"),
+					BypassProxyOnLocal = false,
+					UseDefaultCredentials = false,
+				};
+
+				var httpClientHandler = new HttpClientHandler
 				{
-					return false;
-				}
-				finally
-				{
-					tc?.Close();
-				}
+					Proxy = proxy,
+				};
+
+				var client = new HttpClient(handler: httpClientHandler, disposeHandler: true);
+
+				var response = await client.GetAsync("https://ip.me");
+				return response.IsSuccessStatusCode;
 			}
-			catch
+			catch (Exception ex)
 			{
 				return false;
 			}
