@@ -1,13 +1,14 @@
-﻿using OpenQA.Selenium;
+﻿using Microsoft.VisualBasic;
+using OpenQA.Selenium;
 using OpenQA.Selenium.Chrome;
 using OpenQA.Selenium.Interactions;
 using OpenQA.Selenium.Support.UI;
-using System;
+using RestSharp;
 using System.Data.SqlClient;
+using System.Diagnostics;
+using System.Net;
 using System.Net.Http.Json;
-using System.Net.NetworkInformation;
 using System.Net.Sockets;
-using static System.Runtime.InteropServices.JavaScript.JSType;
 
 namespace TwitterBot
 {
@@ -234,10 +235,9 @@ namespace TwitterBot
 						var rnd = new Random();
 						var likeButtonLocator = By.XPath(@"(//button[@data-testid=""like""])[1]");
 						WaitUntilElementClickable(driver, likeButtonLocator);
-						var jse = (IJavaScriptExecutor)driver;
-						jse.ExecuteScript("window.scrollBy(0,250)");
+						((IJavaScriptExecutor)driver).ExecuteScript("window.scrollBy(0,250)");
 						Thread.Sleep(1800);
-						jse.ExecuteScript("window.scrollBy(0,-240)");
+						((IJavaScriptExecutor)driver).ExecuteScript("window.scrollBy(0,-240)");
 						Actions action = new(driver);
 						action.MoveByOffset(rnd.Next(1, 50), rnd.Next(1, 50)).Click().Build().Perform();
 						Thread.Sleep(3000);
@@ -260,9 +260,9 @@ namespace TwitterBot
 						repostButton.Click();
 						Thread.Sleep(1000);
 
-						jse.ExecuteScript("window.scrollBy(0,350)");
+						((IJavaScriptExecutor)driver).ExecuteScript("window.scrollBy(0,350)");
 						Thread.Sleep(4000);
-						jse.ExecuteScript("window.scrollBy(0,-280)");
+						((IJavaScriptExecutor)driver).ExecuteScript("window.scrollBy(0,-280)");
 						Console.WriteLine($"{MSG_IDENTIFIER}{bot.TwitterUserName} has liked & retweeted the target tweet.");
 						Thread.Sleep(3000);
 					}
@@ -282,10 +282,10 @@ namespace TwitterBot
 			var driver = GetChromeDriver(bot);
 			try
 			{
-				Thread.Sleep(new Random().Next(1000, 600000));
 				if (LoginToTwitter(driver, bot))
 				{
 					driver.Navigate().GoToUrl(TwitterTargetUrl);
+					Thread.Sleep(new Random().Next(1000, 600000));
 					try
 					{
 						var followButtonLocator = By.XPath(@"//span[text()='Follow']");
@@ -317,7 +317,6 @@ namespace TwitterBot
 						JoinTwitterSpace(bot, driver);
 						Thread.Sleep(new Random().Next(120000, 240000) + (SpaceJoinIntervalOffset * 1000));
 					}
-
 				}
 			}
 			finally
@@ -328,60 +327,69 @@ namespace TwitterBot
 		private static void JoinTwitterSpace(Bot bot)
 		{
 			ChromeDriver driver = GetChromeDriver(bot);
-			JoinTwitterSpace(bot, driver);
-			Task.Delay(15 * 60 * 1000).ContinueWith((task) =>
+			if (LoginToTwitter(driver, bot))
 			{
-				SafelyExitBotInstance(driver, bot);
-			});
+				JoinTwitterSpace(bot, driver);
+				Task.Delay(15 * 60 * 1000).ContinueWith((task) =>
+				{
+					SafelyExitBotInstance(driver, bot);
+				});
+			}
 		}
 		private static void ReportTwitterSpace(Bot bot)
 		{
 			ChromeDriver driver = GetChromeDriver(bot);
-			JoinTwitterSpace(bot, driver);
-			var moreOptionsLocator = By.XPath("/html/body/div[1]/div/div/div[1]/div/div[1]/div/div/div/div[1]/div/div/div[1]/div[1]/div/button[3]");
-			var reportSpaceLocator = By.XPath("/html/body/div[1]/div/div/div[1]/div[2]/div/div/div/div[2]/div/div[3]/div/div/div/div[2]");
-			var violenceOptionLocator = By.XPath("/html/body/div[1]/div/div/div[1]/div/div[1]/div/div/div/div[3]/div[2]/div/div/div/div/div/div[4]");
-			var leaveButtonLocator = By.XPath(@"//span[text()='Leave']");
-
-			try
+			if (LoginToTwitter(driver, bot))
 			{
-				var rnd = new Random();
-				WaitUntilElementClickable(driver, moreOptionsLocator);
-				var moreOptions = driver.FindElement(moreOptionsLocator);
-				moreOptions.Click();
-				Thread.Sleep(rnd.Next(2000, 4500));
+				JoinTwitterSpace(bot, driver);
+				var moreOptionsLocator = By.XPath("/html/body/div[1]/div/div/div[1]/div/div[1]/div/div/div/div[1]/div/div/div[1]/div[1]/div/button[3]");
+				var reportSpaceLocator = By.XPath("/html/body/div[1]/div/div/div[1]/div[2]/div/div/div/div[2]/div/div[3]/div/div/div/div[2]");
+				var violenceOptionLocator = By.XPath("/html/body/div[1]/div/div/div[1]/div/div[1]/div/div/div/div[3]/div[2]/div/div/div/div/div/div[4]");
+				var leaveButtonLocator = By.XPath(@"//span[text()='Leave']");
 
-				WaitUntilElementClickable(driver, reportSpaceLocator);
-				var reportSpace = driver.FindElement(reportSpaceLocator);
-				reportSpace.Click();
-				Thread.Sleep(rnd.Next(2000, 4500));
+				try
+				{
+					var rnd = new Random();
+					WaitUntilElementClickable(driver, moreOptionsLocator);
+					var moreOptions = driver.FindElement(moreOptionsLocator);
+					moreOptions.Click();
+					Thread.Sleep(rnd.Next(2000, 4500));
 
-				WaitUntilElementClickable(driver, violenceOptionLocator);
-				var violenceOption = driver.FindElement(violenceOptionLocator);
-				violenceOption.Click();
-				Thread.Sleep(rnd.Next(2000, 4500));
+					WaitUntilElementClickable(driver, reportSpaceLocator);
+					var reportSpace = driver.FindElement(reportSpaceLocator);
+					reportSpace.Click();
+					Thread.Sleep(rnd.Next(2000, 4500));
 
-				WaitUntilElementClickable(driver, leaveButtonLocator);
-				var leaveButton = driver.FindElement(leaveButtonLocator);
-				Thread.Sleep(rnd.Next(2000, 4500));
-			}
-			finally
-			{
-				SafelyExitBotInstance(driver, bot);
+					WaitUntilElementClickable(driver, violenceOptionLocator);
+					var violenceOption = driver.FindElement(violenceOptionLocator);
+					violenceOption.Click();
+					Thread.Sleep(rnd.Next(2000, 4500));
+
+					WaitUntilElementClickable(driver, leaveButtonLocator);
+					var leaveButton = driver.FindElement(leaveButtonLocator);
+					Thread.Sleep(rnd.Next(2000, 4500));
+				}
+				finally
+				{
+					SafelyExitBotInstance(driver, bot);
+				}
 			}
 		}
 		private static void JoinTwitterSpaceAndLaugh(Bot bot)
 		{
 			ChromeDriver driver = GetChromeDriver(bot);
-			if (JoinTwitterSpace(bot, driver))
+			if (LoginToTwitter(driver, bot))
 			{
-				ShowLaughEmoji(driver);
-			}
+				if (JoinTwitterSpace(bot, driver))
+				{
+					ShowLaughEmoji(driver);
+				}
 
-			Task.Delay(15 * 60 * 1000).ContinueWith((task) =>
-			{
-				SafelyExitBotInstance(driver, bot);
-			});
+				Task.Delay(15 * 60 * 1000).ContinueWith((task) =>
+				{
+					SafelyExitBotInstance(driver, bot);
+				});
+			}
 		}
 		private static bool JoinTwitterSpace(Bot bot, ChromeDriver driver)
 		{
@@ -417,6 +425,7 @@ namespace TwitterBot
 				}
 				catch (Exception)
 				{
+					SafelyExitBotInstance(driver, bot);
 					Console.WriteLine($"{MSG_IDENTIFIER}{bot.TwitterUserName} could not join twitter space.");
 				}
 			}
@@ -505,6 +514,7 @@ namespace TwitterBot
 			{
 				var emailVerifyDivLocator = By.XPath("//div[normalize-space()='Please verify your email address.']");
 				WaitUntilElementVisible(driver, emailVerifyDivLocator);
+				Console.WriteLine($"{MSG_IDENTIFIER}Id [{bot.TwitterUserName}] requires email verification.");
 				SqlConnection conn = new(ConnectionString);
 				conn.Open();
 				var sqlQuery = $"Update BotDetails SET IdLocked = 1 WHERE UserName = '{bot.TwitterUserName}'";
@@ -522,6 +532,7 @@ namespace TwitterBot
 			{
 				var idSuspendedSpanLocator = By.XPath("//span[text()='Your account is suspended']");
 				WaitUntilElementVisible(driver, idSuspendedSpanLocator);
+				Console.WriteLine($"{MSG_IDENTIFIER}Id [{bot.TwitterUserName}] is suspended.");
 				SqlConnection conn = new(ConnectionString);
 				conn.Open();
 				var sqlQuery = $"Update BotDetails SET IdSuspended = 1 WHERE UserName = '{bot.TwitterUserName}'";
@@ -556,6 +567,7 @@ namespace TwitterBot
 				}
 				if (idLocked)
 				{
+					Console.WriteLine($"{MSG_IDENTIFIER}Id [{bot.TwitterUserName}] is locked.");
 					SqlConnection conn = new(ConnectionString);
 					conn.Open();
 					var sqlQuery = $"Update BotDetails SET IdLocked = 1 WHERE UserName = '{bot.TwitterUserName}'";
@@ -580,7 +592,7 @@ namespace TwitterBot
 			{
 				SqlConnection conn = new(ConnectionString);
 				conn.Open();
-				var sqlQuery = $"SELECT {preciseSelector} UserName, EmailId, Password FROM BotDetails WHERE Username='Stroke9genius18' AND LoginFailure < 3 AND IdDisabled = 0 AND IdSuspended = 0 AND IdLocked = 0";
+				var sqlQuery = $"SELECT {preciseSelector} UserName, EmailId, Password FROM BotDetails WHERE LoginFailure < 3 AND IdDisabled = 0 AND IdSuspended = 0 AND IdLocked = 0";
 
 				using SqlCommand command = new(sqlQuery, conn);
 				var result = command.ExecuteReader();
@@ -749,20 +761,17 @@ namespace TwitterBot
 		{
 			List<string> workingProxies = [];
 			var client = new HttpClient();
-			var response = await client.GetFromJsonAsync<ProxyResponse>("https://api.proxyscrape.com/v3/free-proxy-list/get?request=displayproxies&country=in&proxy_format=protocolipport&format=json");
+			var response = await client.GetFromJsonAsync<ProxyResponse>("https://api.proxyscrape.com/v3/free-proxy-list/get?request=displayproxies&country=in&protocol=http&skip=0&proxy_format=protocolipport&format=json&limit=20&timeout=1000");
 			var tasks = new List<Task>();
 			foreach (var proxy in response?.Proxies ?? [])
 			{
-				if (!proxy.Proxy.Contains("socks"))
+				tasks.Add(Task.Factory.StartNew(() =>
 				{
-					tasks.Add(Task.Factory.StartNew(() =>
+					if (IsReachable(proxy.Ip, proxy.Port))
 					{
-						if (IsReachable(proxy.Ip, proxy.Port))
-						{
-							workingProxies.Add(proxy.Proxy);
-						}
-					}));
-				}
+						workingProxies.Add(proxy.Proxy);
+					}
+				}));
 			}
 			Task.WaitAll([.. tasks]);
 			return workingProxies;
