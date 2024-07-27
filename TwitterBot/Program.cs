@@ -409,8 +409,6 @@ namespace TwitterBot
 				WaitUntilElementVisible(driver, sheetDialogLocator);
 				try
 				{
-					TakeScreenshot(driver, bot, "1");
-					Thread.Sleep(1000);
 					WaitUntilElementClickable(driver, joinAsSpeakerDirectlyLocator);
 					var joinAsSpeakerDirectly = driver.FindElement(joinAsSpeakerDirectlyLocator);
 					joinAsSpeakerDirectly.Click();
@@ -418,14 +416,10 @@ namespace TwitterBot
 				catch { }
 				if (AnonymousMode)
 				{
-					TakeScreenshot(driver, bot, "2");
-					Thread.Sleep(1000);
 					WaitUntilElementClickable(driver, anonymousToggleLocator);
 					var anonymousButton = driver.FindElement(anonymousToggleLocator);
 					anonymousButton.Click();
 				}
-				TakeScreenshot(driver, bot, "3");
-				Thread.Sleep(1000);
 				WaitUntilElementClickable(driver, startListeningButtonLocator);
 				var startListeningButton = driver.FindElement(startListeningButtonLocator);
 				startListeningButton.Click();
@@ -440,9 +434,8 @@ namespace TwitterBot
 				Console.WriteLine($"{MSG_IDENTIFIER}{bot.TwitterUserName} has joined twitter space.");
 				return true;
 			}
-			catch (Exception ex)
+			catch
 			{
-				WriteToTextFile(bot, ex.Message, "2");
 				try
 				{
 					var leaveButtonLocator = By.XPath(@"//span[text()='Leave']");
@@ -451,11 +444,8 @@ namespace TwitterBot
 					Console.WriteLine($"{MSG_IDENTIFIER}{bot.TwitterUserName} has joined twitter space.");
 					return true;
 				}
-				catch (Exception ex1)
+				catch
 				{
-					WriteToTextFile(bot, ex1.Message, "3");
-					TakeScreenshot(driver, bot, "4");
-					Thread.Sleep(1000);
 					SafelyExitBotInstance(driver, bot);
 					Console.WriteLine($"{MSG_IDENTIFIER}{bot.TwitterUserName} could not join twitter space.");
 				}
