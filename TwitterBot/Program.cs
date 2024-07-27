@@ -83,6 +83,15 @@ namespace TwitterBot
 				var masterDirPath = @$"C:\TwitterBotChromeProfiles\master\{bot.TwitterUserName}";
 				var rootPath = $@"C:\TwitterBotChromeProfiles\{timeStampString}";
 				bot.UserDataDirectory = @$"{rootPath}\{bot.TwitterUserName}";
+				if (!Directory.Exists(@"C:\screenshots"))
+				{
+					Directory.CreateDirectory(@"C:\screenshots");
+				}
+				if (!Directory.Exists(@$"C:\screenshots\{bot.TwitterUserName}"))
+				{
+					Directory.CreateDirectory(@$"C:\screenshots\{bot.TwitterUserName}");
+				}
+				Directory.CreateDirectory(@$"{bot.UserDataDirectory}\screenshots");
 				if (Directory.Exists(masterDirPath))
 				{
 					bot.MasterUserDataExists = true;
@@ -391,15 +400,32 @@ namespace TwitterBot
 		{
 			try
 			{
-				driver.Navigate().GoToUrl(TwitterTargetUrl);
+				driver.Navigate().GoToUrl($"{TwitterTargetUrl}");
+				Thread.Sleep(100000);
+				var sheetDialogLocator = By.XPath(@"//div[@data-testid=""sheetDialog""]");
+				var joinAsSpeakerDirectlyLocator = By.XPath(@"//input[@aria-label='Join as speaker directly']");
 				var startListeningButtonLocator = AnonymousMode ? By.XPath(@"//span[text()='Start listening anonymously']") : By.XPath(@"//span[text()='Start listening']");
-				var anonymousToggleLocator = By.XPath(@"//input[@type='checkbox']");
+				var anonymousToggleLocator = By.XPath(@"//@input[aria-label='Listen anonymously']");
+				WaitUntilElementVisible(driver, sheetDialogLocator);
+				try
+				{
+					TakeScreenshot(driver, bot, "1");
+					Thread.Sleep(1000);
+					WaitUntilElementClickable(driver, joinAsSpeakerDirectlyLocator);
+					var joinAsSpeakerDirectly = driver.FindElement(joinAsSpeakerDirectlyLocator);
+					joinAsSpeakerDirectly.Click();
+				}
+				catch { }
 				if (AnonymousMode)
 				{
+					TakeScreenshot(driver, bot, "2");
+					Thread.Sleep(1000);
 					WaitUntilElementClickable(driver, anonymousToggleLocator);
 					var anonymousButton = driver.FindElement(anonymousToggleLocator);
 					anonymousButton.Click();
 				}
+				TakeScreenshot(driver, bot, "3");
+				Thread.Sleep(1000);
 				WaitUntilElementClickable(driver, startListeningButtonLocator);
 				var startListeningButton = driver.FindElement(startListeningButtonLocator);
 				startListeningButton.Click();
@@ -408,19 +434,28 @@ namespace TwitterBot
 				var gotItButton = driver.FindElement(gotItButtonLocator);
 				gotItButton.Click();
 				UpdateSpaceUrlToProcessEntry(bot);
+				var leaveButtonLocator = By.XPath(@"//span[text()='Leave']");
+				UpdateSpaceUrlToProcessEntry(bot);
+				WaitUntilElementClickable(driver, leaveButtonLocator);
+				Console.WriteLine($"{MSG_IDENTIFIER}{bot.TwitterUserName} has joined twitter space.");
 				return true;
 			}
-			catch (Exception)
+			catch (Exception ex)
 			{
+				WriteToTextFile(bot, ex.Message, "2");
 				try
 				{
 					var leaveButtonLocator = By.XPath(@"//span[text()='Leave']");
 					UpdateSpaceUrlToProcessEntry(bot);
 					WaitUntilElementClickable(driver, leaveButtonLocator);
+					Console.WriteLine($"{MSG_IDENTIFIER}{bot.TwitterUserName} has joined twitter space.");
 					return true;
 				}
-				catch (Exception)
+				catch (Exception ex1)
 				{
+					WriteToTextFile(bot, ex1.Message, "3");
+					TakeScreenshot(driver, bot, "4");
+					Thread.Sleep(1000);
 					SafelyExitBotInstance(driver, bot);
 					Console.WriteLine($"{MSG_IDENTIFIER}{bot.TwitterUserName} could not join twitter space.");
 				}
@@ -609,10 +644,7 @@ namespace TwitterBot
 				"Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36",
 				"Mozilla/5.0 (Windows NT 10.0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36",
 				"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36 Edg/126.0.2592.113",
-				"Mozilla/5.0 (Windows NT 10.0; WOW64; Trident/7.0; rv:11.0) like Gecko",
-				"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:128.0) Gecko/20100101 Firefox/128.0",
-				"Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36 Vivaldi/6.8.3381.48",
-				"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36 Vivaldi/6.8.3381.48"
+				"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:128.0) Gecko/20100101 Firefox/128.0"
 			};
 			var platform = "Win32";
 			var svc = ChromeDriverService.CreateDefaultService();
@@ -627,11 +659,12 @@ namespace TwitterBot
 #endif
 				$"user-agent={userAgents[new Random().Next(0, userAgents.Count-1)]}",
 				"no-sandbox",
-				"start-maximized",
+				"--start-maximized",
 				"disable-notifications",
 				"disable-web-security",
 				"--disable-xss-auditor",
 				"ignore-certificate-errors",
+				//"--blink-settings=imagesEnabled=false",
 				"--disable-blink-features=AutomationControlled",
 				@$"--user-data-dir={bot.UserDataDirectory}",
 			});
@@ -705,8 +738,8 @@ namespace TwitterBot
 
 		private static void FileCopy(string oldPath, string newPath)
 		{
-			FileStream input = null;
-			FileStream output = null;
+			FileStream? input = null;
+			FileStream? output = null;
 			try
 			{
 				input = new FileStream(oldPath, FileMode.Open);
@@ -719,15 +752,13 @@ namespace TwitterBot
 					output.Write(buffer, 0, read);
 				}
 			}
-			catch (Exception e)
-			{
-			}
+			catch (Exception) { }
 			finally
 			{
-				input.Close();
-				input.Dispose();
-				output.Close();
-				output.Dispose();
+				input?.Close();
+				input?.Dispose();
+				output?.Close();
+				output?.Dispose();
 			}
 		}
 
@@ -765,24 +796,24 @@ namespace TwitterBot
 		private static async Task<List<string>> GetProxies()
 		{
 			List<string> workingProxies = [];
-			var client = new HttpClient();
-			var response = await client.GetFromJsonAsync<ProxyResponse>("https://api.proxyscrape.com/v3/free-proxy-list/get?request=displayproxies&country=in&protocol=http&skip=0&proxy_format=protocolipport&format=json&limit=100&timeout=5000");
-			var tasks = new List<Task>();
-			foreach (var proxy in response?.Proxies ?? [])
-			{
-				tasks.Add(Task.Factory.StartNew(() =>
-				{
-					if (IsReachable(proxy.Ip, proxy.Port).Result)
-					{
-						var proxyToAdd = $"{proxy.Ip}:{proxy.Port}";
-						if (!workingProxies.Contains(proxyToAdd))
-						{
-							workingProxies.Add(proxyToAdd);
-						}
-					}
-				}));
-			}
-			Task.WaitAll([.. tasks]);
+			//var client = new HttpClient();
+			//var response = await client.GetFromJsonAsync<ProxyResponse>("https://api.proxyscrape.com/v3/free-proxy-list/get?request=displayproxies&country=in&protocol=http&skip=0&proxy_format=protocolipport&format=json&limit=100&timeout=5000");
+			//var tasks = new List<Task>();
+			//foreach (var proxy in response?.Proxies ?? [])
+			//{
+			//	tasks.Add(Task.Factory.StartNew(() =>
+			//	{
+			//		if (IsReachable(proxy.Ip, proxy.Port).Result)
+			//		{
+			//			var proxyToAdd = $"{proxy.Ip}:{proxy.Port}";
+			//			if (!workingProxies.Contains(proxyToAdd))
+			//			{
+			//				workingProxies.Add(proxyToAdd);
+			//			}
+			//		}
+			//	}));
+			//}
+			//Task.WaitAll([.. tasks]);
 			return workingProxies;
 		}
 
@@ -807,10 +838,21 @@ namespace TwitterBot
 				var response = await client.GetAsync("https://ip.me");
 				return response.IsSuccessStatusCode;
 			}
-			catch (Exception ex)
+			catch
 			{
 				return false;
 			}
+		}
+
+		private static void WriteToTextFile(Bot bot, string textToWrite, string fileNameSuffix = "")
+		{
+			File.WriteAllText(@$"C:\screenshots\{bot.TwitterUserName}\{DateTime.Now:yyyyMMddHHmmss}{(!string.IsNullOrWhiteSpace(fileNameSuffix) ? "_" : string.Empty)}{fileNameSuffix}.txt", textToWrite);
+		}
+
+		private static void TakeScreenshot(ChromeDriver driver, Bot bot, string fileNameSuffix = "")
+		{
+			Screenshot ss = ((ITakesScreenshot)driver).GetScreenshot();
+			ss.SaveAsFile(@$"C:\screenshots\{bot.TwitterUserName}\{DateTime.Now:yyyyMMddHHmmss}{(!string.IsNullOrWhiteSpace(fileNameSuffix) ? "_" : string.Empty)}{fileNameSuffix}.png");
 		}
 		#endregion
 	}
