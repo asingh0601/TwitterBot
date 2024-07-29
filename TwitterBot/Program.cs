@@ -24,6 +24,7 @@ namespace TwitterBot
 		private static string? TwitterTargetUrl;
 		private static int SpaceJoinIntervalOffset = 0;
 		private static string? CommandUserName;
+		private static string? TimeStampString;
 		private static INetwork? NetworkInterceptor;
 		private static readonly string MSG_IDENTIFIER = "BOT_RESPONSE: ";
 		#endregion
@@ -53,7 +54,7 @@ namespace TwitterBot
 			Bots = GetBotsFromDb();
 
 			Console.WriteLine($"{MSG_IDENTIFIER}{Bots.Count} bots summoned. Total of {(workingProxies.Count == 0 ? 1 : workingProxies.Count)} proxies would be used.");
-			var timeStampString = $"{DateTime.Now:yyyyMMddHHmmssffff}";
+			TimeStampString = $"{DateTime.Now:yyyyMMddHHmmssffff}";
 
 			Action<Bot>? function = null;
 			switch (taskType)
@@ -81,17 +82,17 @@ namespace TwitterBot
 			foreach (var bot in Bots)
 			{
 				var masterDirPath = @$"C:\TwitterBotChromeProfiles\master\{bot.TwitterUserName}";
-				var rootPath = $@"C:\TwitterBotChromeProfiles\{timeStampString}";
+				var rootPath = $@"C:\TwitterBotChromeProfiles\{CommandUserName}_{TimeStampString}";
 				bot.UserDataDirectory = @$"{rootPath}\{bot.TwitterUserName}";
+
 				if (!Directory.Exists(@"C:\screenshots"))
 				{
 					Directory.CreateDirectory(@"C:\screenshots");
 				}
-				if (!Directory.Exists(@$"C:\screenshots\{bot.TwitterUserName}"))
+				if (!Directory.Exists(@$"C:\screenshots\{CommandUserName}_{TimeStampString}"))
 				{
-					Directory.CreateDirectory(@$"C:\screenshots\{bot.TwitterUserName}");
+					Directory.CreateDirectory(@$"C:\screenshots\{CommandUserName}_{TimeStampString}");
 				}
-				Directory.CreateDirectory(@$"{bot.UserDataDirectory}\screenshots");
 				if (Directory.Exists(masterDirPath))
 				{
 					bot.MasterUserDataExists = true;
@@ -214,8 +215,10 @@ namespace TwitterBot
 					bot.LoginSuccessful = true;
 					return true;
 				}
-				catch (Exception)
+				catch (Exception ex)
 				{
+					TakeScreenshot(driver, bot);
+					WriteToTextFile(bot, ex.Message);
 					Console.WriteLine($"{MSG_IDENTIFIER}{bot.TwitterUserName} could not log in to twitter.");
 					MarkLoginFailure(bot);
 					SafelyExitBotInstance(driver, bot);
@@ -312,6 +315,7 @@ namespace TwitterBot
 		}
 		private static void RunTwitterSpacesBot(Bot bot)
 		{
+			var spaceJoinAttempts = 0;
 			var driver = GetChromeDriver(bot);
 			try
 			{
@@ -319,8 +323,19 @@ namespace TwitterBot
 				{
 					for (int i = 0; i < 1000; i++)
 					{
-						JoinTwitterSpace(bot, driver);
-						Thread.Sleep(new Random().Next(120000, 240000) + (SpaceJoinIntervalOffset * 1000));
+						if(spaceJoinAttempts > 2)
+						{
+							break;
+						}
+						if (JoinTwitterSpace(bot, driver, verbose: i < 1))
+						{
+							spaceJoinAttempts = 0;
+						}
+						else
+						{
+							spaceJoinAttempts++;
+						}
+						Thread.Sleep(new Random().Next(0, 5000) + (SpaceJoinIntervalOffset * 1000));
 					}
 				}
 			}
@@ -346,11 +361,10 @@ namespace TwitterBot
 			ChromeDriver driver = GetChromeDriver(bot);
 			if (LoginToTwitter(driver, bot))
 			{
-				JoinTwitterSpace(bot, driver);
-				var moreOptionsLocator = By.XPath("/html/body/div[1]/div/div/div[1]/div/div[1]/div/div/div/div[1]/div/div/div[1]/div[1]/div/button[3]");
-				var reportSpaceLocator = By.XPath("/html/body/div[1]/div/div/div[1]/div[2]/div/div/div/div[2]/div/div[3]/div/div/div/div[2]");
-				var violenceOptionLocator = By.XPath("/html/body/div[1]/div/div/div[1]/div/div[1]/div/div/div/div[3]/div[2]/div/div/div/div/div/div[4]");
-				var leaveButtonLocator = By.XPath(@"//span[text()='Leave']");
+				OpenTwitterSpace(bot, driver, true);
+				var moreOptionsLocator = By.XPath("/html/body/div[1]/div/div/div[1]/div[3]/div/div/div/div/div/div[2]/div/div[2]/div/div[2]/div[2]/div[2]/button");
+				var reportSpaceLocator = By.XPath(@"//span[text()='Report this Space']");
+				var violenceOptionLocator = By.XPath(@"//span[text()='Violence']");
 
 				try
 				{
@@ -369,10 +383,11 @@ namespace TwitterBot
 					var violenceOption = driver.FindElement(violenceOptionLocator);
 					violenceOption.Click();
 					Thread.Sleep(rnd.Next(2000, 4500));
-
-					WaitUntilElementClickable(driver, leaveButtonLocator);
-					var leaveButton = driver.FindElement(leaveButtonLocator);
-					Thread.Sleep(rnd.Next(2000, 4500));
+					Console.WriteLine($"{MSG_IDENTIFIER}{bot.TwitterUserName} has reported the space.");
+				}
+				catch
+				{
+					Console.WriteLine($"{MSG_IDENTIFIER}{bot.TwitterUserName} could not report space.");
 				}
 				finally
 				{
@@ -396,59 +411,108 @@ namespace TwitterBot
 				});
 			}
 		}
-		private static bool JoinTwitterSpace(Bot bot, ChromeDriver driver)
+		private static bool JoinTwitterSpace(Bot bot, ChromeDriver driver, bool verbose = true)
 		{
 			try
 			{
-				driver.Navigate().GoToUrl($"{TwitterTargetUrl}");
-				Thread.Sleep(100000);
-				var sheetDialogLocator = By.XPath(@"//div[@data-testid=""sheetDialog""]");
-				var joinAsSpeakerDirectlyLocator = By.XPath(@"//input[@aria-label='Join as speaker directly']");
-				var startListeningButtonLocator = AnonymousMode ? By.XPath(@"//span[text()='Start listening anonymously']") : By.XPath(@"//span[text()='Start listening']");
-				var anonymousToggleLocator = By.XPath(@"//@input[aria-label='Listen anonymously']");
-				WaitUntilElementVisible(driver, sheetDialogLocator);
-				try
+				if (OpenTwitterSpace(bot, driver, true))
 				{
-					WaitUntilElementClickable(driver, joinAsSpeakerDirectlyLocator);
-					var joinAsSpeakerDirectly = driver.FindElement(joinAsSpeakerDirectlyLocator);
-					joinAsSpeakerDirectly.Click();
+					var startListeningButtonLocator = AnonymousMode ? By.XPath(@"//span[text()='Start listening anonymously']") : By.XPath(@"//span[text()='Start listening']");
+					var anonymousToggleLocator = By.XPath(@"//@input[aria-label='Listen anonymously']");
+
+					//try
+					//{
+					//	var joinAsSpeakerDirectlyLocator = By.XPath(@"//input[@aria-label='Join as speaker directly']");
+					//	WaitUntilElementClickable(driver, joinAsSpeakerDirectlyLocator);
+					//	var joinAsSpeakerDirectly = driver.FindElement(joinAsSpeakerDirectlyLocator);
+					//	joinAsSpeakerDirectly.Click();
+					//}
+					//catch { }
+
+					if (AnonymousMode)
+					{
+						WaitUntilElementClickable(driver, anonymousToggleLocator);
+						var anonymousButton = driver.FindElement(anonymousToggleLocator);
+						anonymousButton.Click();
+					}
+					WaitUntilElementClickable(driver, startListeningButtonLocator);
+					var startListeningButton = driver.FindElement(startListeningButtonLocator);
+					startListeningButton.Click();
+
+					//var gotItButtonLocator = By.XPath(@"//span[text()='Got it']");
+					//WaitUntilElementClickable(driver, gotItButtonLocator);
+					//var gotItButton = driver.FindElement(gotItButtonLocator);
+					//gotItButton.Click();
+
+					if (verbose)
+					{
+						UpdateSpaceUrlToProcessEntry(bot);
+					}
+
+					var leaveButtonLocator = By.XPath(@"//span[text()='Leave']");
+					WaitUntilElementClickable(driver, leaveButtonLocator);
+
+					if (verbose)
+					{
+						Console.WriteLine($"{MSG_IDENTIFIER}{bot.TwitterUserName} has joined twitter space.");
+					}
+					return true;
 				}
-				catch { }
-				if (AnonymousMode)
-				{
-					WaitUntilElementClickable(driver, anonymousToggleLocator);
-					var anonymousButton = driver.FindElement(anonymousToggleLocator);
-					anonymousButton.Click();
-				}
-				WaitUntilElementClickable(driver, startListeningButtonLocator);
-				var startListeningButton = driver.FindElement(startListeningButtonLocator);
-				startListeningButton.Click();
-				var gotItButtonLocator = By.XPath(@"//span[text()='Got it']");
-				WaitUntilElementClickable(driver, gotItButtonLocator);
-				var gotItButton = driver.FindElement(gotItButtonLocator);
-				gotItButton.Click();
-				UpdateSpaceUrlToProcessEntry(bot);
-				var leaveButtonLocator = By.XPath(@"//span[text()='Leave']");
-				UpdateSpaceUrlToProcessEntry(bot);
-				WaitUntilElementClickable(driver, leaveButtonLocator);
-				Console.WriteLine($"{MSG_IDENTIFIER}{bot.TwitterUserName} has joined twitter space.");
-				return true;
+				return false;
 			}
 			catch
 			{
 				try
 				{
 					var leaveButtonLocator = By.XPath(@"//span[text()='Leave']");
-					UpdateSpaceUrlToProcessEntry(bot);
+					if (verbose)
+					{
+						UpdateSpaceUrlToProcessEntry(bot);
+					}
 					WaitUntilElementClickable(driver, leaveButtonLocator);
-					Console.WriteLine($"{MSG_IDENTIFIER}{bot.TwitterUserName} has joined twitter space.");
+					if (verbose)
+					{
+						Console.WriteLine($"{MSG_IDENTIFIER}{bot.TwitterUserName} has joined twitter space.");
+					}
 					return true;
 				}
-				catch
+				catch (Exception ex)
 				{
+					TakeScreenshot(driver, bot);
+					WriteToTextFile(bot, ex.Message);
 					SafelyExitBotInstance(driver, bot);
-					Console.WriteLine($"{MSG_IDENTIFIER}{bot.TwitterUserName} could not join twitter space.");
+					if (verbose)
+					{
+						Console.WriteLine($"{MSG_IDENTIFIER}{bot.TwitterUserName} could not join twitter space.");
+					}
 				}
+			}
+			return false;
+		}
+		private static bool OpenTwitterSpace(Bot bot, ChromeDriver driver, bool recurse = true)
+		{
+			try
+			{
+				if (driver.Url.Equals(TwitterTargetUrl, StringComparison.CurrentCultureIgnoreCase))
+				{
+					driver.Navigate().Refresh();
+				}
+				else
+				{
+					driver.Navigate().GoToUrl($"{TwitterTargetUrl}");
+				}
+				var sheetDialogLocator = By.XPath(@"//div[@data-testid=""sheetDialog""]");			
+				WaitUntilElementVisible(driver, sheetDialogLocator);
+				Console.WriteLine($"{MSG_IDENTIFIER}{bot.TwitterUserName} has opened twitter space.");
+				return true;
+			}
+			catch
+			{
+				if (recurse)
+				{
+					OpenTwitterSpace(bot, driver, recurse: false);
+				}
+				Console.WriteLine($"{MSG_IDENTIFIER}{bot.TwitterUserName} could not open twitter space.");
 			}
 			return false;
 		}
@@ -787,7 +851,7 @@ namespace TwitterBot
 		{
 			List<string> workingProxies = [];
 			//var client = new HttpClient();
-			//var response = await client.GetFromJsonAsync<ProxyResponse>("https://api.proxyscrape.com/v3/free-proxy-list/get?request=displayproxies&country=in&protocol=http&skip=0&proxy_format=protocolipport&format=json&limit=100&timeout=5000");
+			//var response = await client.GetFromJsonAsync<ProxyResponse>("https://api.proxyscrape.com/v3/free-proxy-list/get?request=displayproxies&country=in&protocol=http&skip=0&proxy_format=protocolipport&format=json&limit=100&timeout=10000");
 			//var tasks = new List<Task>();
 			//foreach (var proxy in response?.Proxies ?? [])
 			//{
@@ -836,13 +900,13 @@ namespace TwitterBot
 
 		private static void WriteToTextFile(Bot bot, string textToWrite, string fileNameSuffix = "")
 		{
-			File.WriteAllText(@$"C:\screenshots\{bot.TwitterUserName}\{DateTime.Now:yyyyMMddHHmmss}{(!string.IsNullOrWhiteSpace(fileNameSuffix) ? "_" : string.Empty)}{fileNameSuffix}.txt", textToWrite);
+			File.WriteAllText(@$"C:\screenshots\{CommandUserName}_{TimeStampString}\{bot.TwitterUserName}_{DateTime.Now:yyyyMMddHHmmss}{(!string.IsNullOrWhiteSpace(fileNameSuffix) ? "_" : string.Empty)}{fileNameSuffix}.txt", textToWrite);
 		}
 
 		private static void TakeScreenshot(ChromeDriver driver, Bot bot, string fileNameSuffix = "")
 		{
 			Screenshot ss = ((ITakesScreenshot)driver).GetScreenshot();
-			ss.SaveAsFile(@$"C:\screenshots\{bot.TwitterUserName}\{DateTime.Now:yyyyMMddHHmmss}{(!string.IsNullOrWhiteSpace(fileNameSuffix) ? "_" : string.Empty)}{fileNameSuffix}.png");
+			ss.SaveAsFile(@$"C:\screenshots\{CommandUserName}_{TimeStampString}\{bot.TwitterUserName}_{DateTime.Now:yyyyMMddHHmmss}{(!string.IsNullOrWhiteSpace(fileNameSuffix) ? "_" : string.Empty)}{fileNameSuffix}.png");
 		}
 		#endregion
 	}

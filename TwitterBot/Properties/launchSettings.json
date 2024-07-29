@@ -2,7 +2,7 @@
   "profiles": {
     "TwitterBot": {
       "commandName": "Project",
-      "commandLineArgs": "/rjoin https://x.com/i/spaces/1YpKklXNkroGj/peek -commandBy#theterminator07"
+      "commandLineArgs": "/join https://x.com/i/spaces/1OwxWNRBBomJQ/peek -commandBy#theterminator07"
     }
   }
 }
